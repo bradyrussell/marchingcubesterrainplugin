@@ -6,7 +6,7 @@
 // Sets default values
 APagedRegion::APagedRegion()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 	Scene = CreateDefaultSubobject<USceneComponent>(FName(TEXT("Root")));
 	SetRootComponent(Scene);
 }
@@ -16,36 +16,36 @@ void APagedRegion::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!extractionResultQueue.IsEmpty()) { 
+	//if (!extractionResultQueue.IsEmpty()) { 
 
-		TArray<FExtractionTaskOutput> gen;
-		extractionResultQueue.Dequeue(gen);
+	//	TArray<FExtractionTaskOutput> gen;
+	//	extractionResultQueue.Dequeue(gen);
 
-		int Material = 0;
+	//	int Material = 0;
 
-		for (FExtractionTaskOutput r : gen) {
-			if (r.Indices.Num() > 0) { // fixes dhd3d resource crash 
+	//	for (FExtractionTaskOutput r : gen) {
+	//		if (r.Indices.Num() > 0) { // fixes dhd3d resource crash 
 
-				FRuntimeMeshDataPtr Data = rMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
-				Data->EnterSerializedMode();
+	//			FRuntimeMeshDataPtr Data = rMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
+	//			Data->EnterSerializedMode();
 
-				if (!wasCreated[Material]) {
-					Data->CreateMeshSection(Material, r.Vertices, r.Indices, r.Normals, r.UV0, r.Colors, r.Tangents, true, EUpdateFrequency::Average);
-					wasCreated[Material] = true;
-				}
-				else {
-					Data->UpdateMeshSection(Material, r.Vertices, r.Indices, r.Normals, r.UV0, r.Colors, r.Tangents);
-				}
+	//			if (!wasCreated[Material]) {
+	//				Data->CreateMeshSection(Material, r.Vertices, r.Indices, r.Normals, r.UV0, r.Colors, r.Tangents, true, EUpdateFrequency::Average);
+	//				wasCreated[Material] = true;
+	//			}
+	//			else {
+	//				Data->UpdateMeshSection(Material, r.Vertices, r.Indices, r.Normals, r.UV0, r.Colors, r.Tangents);
+	//			}
 
-				auto Section = Data->BeginSectionUpdate(Material); // must be called every update
-				rMesh->SetMaterial(Material, world->TerrainMaterials[Material]);
-				Section->Commit();
-			}
-			Material++;
-		}
+	//			auto Section = Data->BeginSectionUpdate(Material); // must be called every update
+	//			rMesh->SetMaterial(Material, world->TerrainMaterials[Material]);
+	//			Section->Commit();
+	//		}
+	//		Material++;
+	//	}
 
-		world->MarkRegionDirtyAndAdjacent(FIntVector(GetActorLocation()));
-	}
+	//	world->MarkRegionDirtyAndAdjacent(FIntVector(GetActorLocation()));
+	//}
 }
 
 APagedRegion::~APagedRegion()

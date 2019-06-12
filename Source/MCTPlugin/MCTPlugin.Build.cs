@@ -32,7 +32,8 @@ public class MCTPlugin : ModuleRules
                 "CoreUObject",
                 "UnrealFastNoisePlugin",
                 "RuntimeMeshComponent",
-                "Projects", 
+                "Projects",
+                "Engine"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -41,7 +42,8 @@ public class MCTPlugin : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-                 //"UnrealFastNoisePlugin", "RuntimeMeshComponent"// ... add private dependencies that you statically link with here ...	
+                                 "UnrealFastNoisePlugin",
+                "RuntimeMeshComponent"//"UnrealFastNoisePlugin", "RuntimeMeshComponent"// ... add private dependencies that you statically link with here ...	
 			}
 			);
 		
