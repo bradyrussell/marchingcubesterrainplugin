@@ -31,10 +31,11 @@ void APagedWorld::Tick(float DeltaTime)
 
 		FWorldGenerationTaskOutput gen;
 		worldGenerationQueue.Dequeue(gen);
+		remainingRegionsToGenerate--;
 
-		for (int32 x = 0; x < 32; x++) {
-			for (int32 y = 0; y < 32; y++) {
-				for (int32 z = 0; z < 32; z++) {
+		for (int32 x = 0; x < REGION_SIZE; x++) { 
+			for (int32 y = 0; y < REGION_SIZE; y++) {
+				for (int32 z = 0; z < REGION_SIZE; z++) {
 					VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
 				}
 			}
@@ -62,10 +63,13 @@ void APagedWorld::Tick(float DeltaTime)
 						int32 ny = y - n;
 						int32 nz = z - n;
 
-						VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
-						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
-						//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz))); //proper
-						//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + (2*nx), update.origin.Y + (2*ny), update.origin.Z + (2*nz)))); //hack
+						//if (!update.bIsSpherical || FVector::DistSquared(FVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz), FVector(update.origin)) <= update.radius*update.radius) { // not the optimal sphere algo 
+
+							VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
+							MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
+							//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz))); //proper
+							//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + (2*nx), update.origin.Y + (2*ny), update.origin.Z + (2*nz)))); //hack
+						//}
 					}
 				}
 			}
@@ -78,9 +82,18 @@ void APagedWorld::Tick(float DeltaTime)
 
 	// do region updates
 	for (auto& region : dirtyRegions){ // if we render unloaded regions we get cascading world gen
-		if(regions.Contains(region)) getRegionAt(region)->Render();
+		if (regions.Contains(region)) getRegionAt(region)->SlowRender();
+		//if (regions.Contains(region)) QueueRegionRender(region);
 	}
 	dirtyRegions.Empty();
+
+	//while (!extractionQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount
+	//	FExtractionTaskOutput gen;
+	//	extractionQueue.Dequeue(gen);
+
+	//	getRegionAt(gen.region)->RenderParsed(gen);
+	//}
+
 }
 
 void APagedWorld::PostInitializeComponents() {
@@ -108,6 +121,16 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 	return region;
 }
 
+ void APagedWorld::QueueRegionRender(FIntVector pos)
+{
+	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
+}
+
+// void APagedWorld::QueueRegionRender(FIntVector pos)
+//{
+//	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
+//}
+
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 	dirtyRegions.Emplace(pos);
 
@@ -123,17 +146,17 @@ void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 
 void APagedWorld::GenerateWorldRadius(FIntVector pos, int32 radius)
 {
-	for (int x = -radius; x <= radius; x++) {
+	for (int z = -radius; z <= radius; z++) { // top down makes it feel faster
 		for (int y = -radius; y <= radius; y++) {
-			for (int z = -radius; z <= radius; z++) {
-				FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, REGION_SIZE*z);
+			for (int x = -radius; x <= radius; x++) {
+				FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE*z); // -z means we gen higher regions first?
 				if (!regions.Contains(surrounding)) beginWorldGeneration(surrounding);
 			}
 		}
 	}
 }
 
-bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d)
+bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical)
 {
 	FVoxelUpdate update;
 
@@ -141,6 +164,7 @@ bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d)
 	update.material = m;
 	update.density = d;
 	update.radius = r;
+	update.bIsSpherical = bIsSpherical;
 
 	voxelUpdateQueue.Enqueue(update);
 
@@ -150,18 +174,19 @@ bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d)
 
 FIntVector APagedWorld::VoxelToRegionCoords(FIntVector voxel)
 {
-	FVector tmp = FVector(voxel) / 32.0;
+	FVector tmp = FVector(voxel) / (float)REGION_SIZE;
 	return FIntVector(FMath::FloorToInt(tmp.X), FMath::FloorToInt(tmp.Y), FMath::FloorToInt(tmp.Z))*32;
 }
 
 FIntVector APagedWorld::WorldToVoxelCoords(FVector world)
 {
-	return FIntVector(world/100);
+	return FIntVector(world/VOXEL_SIZE);
 }
 
 void APagedWorld::beginWorldGeneration(FIntVector pos)
 {
 	getRegionAt(pos); // create the actor
+	remainingRegionsToGenerate++;
 	(new FAutoDeleteAsyncTask<WorldGenThread::RegionGenerationTask>(this, pos))->StartBackgroundTask();
 }
 

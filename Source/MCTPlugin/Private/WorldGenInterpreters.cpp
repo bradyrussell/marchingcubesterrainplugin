@@ -1,5 +1,30 @@
 #include "WorldGenInterpreters.h"
 
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Woods(int32 x, int32 y, int32 z, UUFNNoiseGenerator * material, UUFNNoiseGenerator * heightmap, UUFNNoiseGenerator * biome)
+{
+	PolyVox::MaterialDensityPair88 Voxel;
+	auto _height = heightmap->GetNoise2D(x, y);
+	auto _material = material->GetNoise3D(x, y, z);
+	auto _biome = biome->GetNoise3D(x, y, z);
+
+	if (z <= 0+(_biome)) {
+		Voxel.setMaterial(1);
+		Voxel.setDensity(Voxel.getMaxDensity());
+	}
+	else if (z > _height*2) {
+		Voxel.setMaterial(0);
+		Voxel.setDensity(0);
+	}
+	else {
+		uint16 r = _material;
+		uint16 g = .8 * Voxel.getMaxDensity();
+
+		Voxel.setMaterial(2);
+		Voxel.setDensity(g);
+	}
+	return Voxel;
+}
+
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_AlienSpires(int32 x, int32 y, int32 z, UUFNNoiseGenerator * material, UUFNNoiseGenerator * heightmap, UUFNNoiseGenerator * biome)
 {
 	PolyVox::MaterialDensityPair88 Voxel;

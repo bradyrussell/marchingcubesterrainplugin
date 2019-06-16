@@ -16,19 +16,6 @@
 #include "PagedWorld.h"
 #include "PagedRegion.generated.h"
 
-//USTRUCT(BlueprintType)
-//struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
-//{
-//	GENERATED_BODY()
-//
-//	TArray<FVector> Vertices = TArray<FVector>();
-//	TArray<FVector> Normals = TArray<FVector>();
-//	TArray<FRuntimeMeshTangent> Tangents = TArray<FRuntimeMeshTangent>();
-//	TArray<FColor> Colors = TArray<FColor>();
-//	TArray<FVector2D> UV0 = TArray<FVector2D>();
-//	TArray<int32> Indices = TArray<int32>();
-//};
-
 
 UCLASS()
 class MCTPLUGIN_API APagedRegion : public AActor
@@ -62,7 +49,10 @@ public:
 
 	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* world;
 
-	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable)void Render();
+	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable)void SlowRender();
+	void RenderDecoded(PolyVox::Mesh<PolyVox::Vertex<PolyVox::MaterialDensityPair88>, unsigned int> decoded);
+
+	void RenderParsed(FExtractionTaskOutput output);
 private:
 
 };

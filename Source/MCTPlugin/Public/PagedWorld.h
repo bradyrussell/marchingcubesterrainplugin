@@ -20,7 +20,29 @@ class UTerrainPagingComponent;
 
 #define REGION_SIZE 32
 #define VOXEL_SIZE 100
+#define MAX_MATERIALS 4
 
+
+
+USTRUCT(BlueprintType)
+struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
+{
+	GENERATED_BODY()
+	TArray<FVector> Vertices = TArray<FVector>();
+	TArray<FVector> Normals = TArray<FVector>();
+	TArray<FRuntimeMeshTangent> Tangents = TArray<FRuntimeMeshTangent>();
+	TArray<FColor> Colors = TArray<FColor>();
+	TArray<FVector2D> UV0 = TArray<FVector2D>();
+	TArray<int32> Indices = TArray<int32>();
+};
+
+USTRUCT(BlueprintType)
+struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
+{
+	GENERATED_BODY()
+		FIntVector region;
+	TArray<FExtractionTaskSection> section = TArray<FExtractionTaskSection>();
+};
 
 USTRUCT(BlueprintType)
 struct FVoxelUpdate // a change of a group of voxels from any type to a single new type
@@ -36,6 +58,8 @@ struct FVoxelUpdate // a change of a group of voxels from any type to a single n
 		uint8 density;
 		//UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
 		//bool bShouldDrop;
+		UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
+		bool bIsSpherical;
 };
 
 USTRUCT(BlueprintType)
@@ -49,6 +73,16 @@ struct FWorldGenerationTaskOutput //
 	PolyVox::MaterialDensityPair88 voxel[32][32][32]; // ~ 500 kb
 };
 
+//USTRUCT(BlueprintType)
+//struct FExtractionTaskOutput // 
+//{
+//	GENERATED_BODY()
+//
+//		UPROPERTY(BlueprintReadWrite, Category = "Extraction Task")
+//		FIntVector pos;
+//
+//	PolyVox::Mesh<PolyVox::Vertex<PolyVox::MaterialDensityPair88>, unsigned int> decoded;
+//};
 
 
 UCLASS()
@@ -84,12 +118,14 @@ public:
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
 
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void QueueRegionRender(FIntVector pos);
+
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable)void GenerateWorldRadius(FIntVector pos, int32 radius);
 
 	//debug mod terrain
-	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d);
+	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical);
 
 
 	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure)
@@ -100,6 +136,7 @@ public:
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void beginWorldGeneration(FIntVector pos);
 
+	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
@@ -107,6 +144,9 @@ public:
 	TSet<FIntVector> dirtyRegions; // region keys which need redrawn; either because their voxels were modified or because they were just created
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
+
+	FCriticalSection VolumeMutex;
+	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager
@@ -196,10 +236,10 @@ namespace WorldGenThread {
 			output.pos = lower;
 
 			// generate
-			for (int32 x = 0; x < 32; x++){
-				for (int32 y = 0; y < 32; y++){
-					for (int32 z = 0; z < 32; z++){
-						output.voxel[x][y][z] = WorldGen::Interpret_AlienSpires(x + lower.X, y + lower.Y, z + lower.Z, material, heightmap, biome);
+			for (int32 x = 0; x < REGION_SIZE; x++){
+				for (int32 y = 0; y < REGION_SIZE; y++){
+					for (int32 z = 0; z < REGION_SIZE; z++){ // todo save function ptr to interp as param that way we can change them on the fly
+						output.voxel[x][y][z] = WorldGen::Interpret_Woods(x + lower.X, y + lower.Y, z + lower.Z, material, heightmap, biome);
 					}
 				}
 			}
@@ -209,3 +249,122 @@ namespace WorldGenThread {
 	};
 	////////////////////////////////////////////////////////////////////////
 };
+
+namespace ExtractionThread {
+	////////////////////////////////////////////////////////////////////////
+	class ExtractionTask : public FNonAbandonableTask {
+		friend class FAutoDeleteAsyncTask<ExtractionTask>;
+		APagedWorld* world;
+		FIntVector lower;
+	public:
+		ExtractionTask(APagedWorld* world, FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/) {
+			this->world = world;
+			this->lower = lower;
+		}
+
+		FORCEINLINE TStatId GetStatId() const
+		{
+			RETURN_QUICK_DECLARE_CYCLE_STAT(ExtractionTask, STATGROUP_ThreadPoolAsyncTasks);
+		}
+
+		void DoWork() {
+			FExtractionTaskOutput output;
+			output.section.AddDefaulted(MAX_MATERIALS);
+			output.region = lower;
+
+			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z), PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE, lower.Z + REGION_SIZE));
+			
+			world->VolumeMutex.Lock();
+			auto ExtractedMesh = PolyVox::extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
+			world->VolumeMutex.Unlock();
+
+			auto decoded = PolyVox::decodeMesh(ExtractedMesh);
+
+			//output.decoded = DecodedMesh;
+
+			FVector OffsetLocation = FVector(lower);
+
+			if (decoded.getNoOfIndices() == 0)
+				return;
+
+
+			for (int32 Material = 0; Material < world->TerrainMaterials.Num(); Material++)
+			{
+				// Loop over all of the triangle vertex indices
+				for (uint32 i = 0; i < decoded.getNoOfIndices() - 2; i += 3)
+				{
+					// We need to add the vertices of each triangle in reverse or the mesh will be upside down
+					auto Index = decoded.getIndex(i + 2);
+					auto Vertex2 = decoded.getVertex(Index);
+					auto TriangleMaterial = Vertex2.data.getMaterial();
+
+					// Before we continue, we need to be sure that the triangle is the right material; we don't want to use verticies from other materials
+					if (TriangleMaterial == (Material + 1))
+					{
+						// If it is of the same material, then we need to add the correct indices now
+						output.section[Material].Indices.Add(output.section[Material].Vertices.Add((FPolyVoxVector(Vertex2.position) + OffsetLocation) * VOXEL_SIZE));
+
+						Index = decoded.getIndex(i + 1);
+						auto Vertex1 = decoded.getVertex(Index);
+						output.section[Material].Indices.Add(output.section[Material].Vertices.Add((FPolyVoxVector(Vertex1.position) + OffsetLocation) * VOXEL_SIZE));
+
+						Index = decoded.getIndex(i);
+						auto Vertex0 = decoded.getVertex(Index);
+						output.section[Material].Indices.Add(output.section[Material].Vertices.Add((FPolyVoxVector(Vertex0.position) + OffsetLocation) * VOXEL_SIZE));
+
+						// Calculate the tangents of our triangle
+						const FVector Edge01 = FPolyVoxVector(Vertex1.position - Vertex0.position);
+						const FVector Edge02 = FPolyVoxVector(Vertex2.position - Vertex0.position);
+
+						const FVector TangentX = Edge01.GetSafeNormal();
+						FVector TangentZ = (Edge01 ^ Edge02).GetSafeNormal();
+
+						for (int32 i = 0; i < 3; i++)
+						{
+							output.section[Material].Tangents.Add(FRuntimeMeshTangent(TangentX, false));
+							output.section[Material].Normals.Add(TangentZ);
+						}
+					}
+				}
+			}
+			//////////////////////////
+
+			world->extractionQueue.Enqueue(output);
+		}
+	};
+	////////////////////////////////////////////////////////////////////////
+};
+
+//namespace ExtractionThread {
+//	////////////////////////////////////////////////////////////////////////
+//	class ExtractionTask : public FNonAbandonableTask {
+//		friend class FAutoDeleteAsyncTask<ExtractionTask>;
+//		APagedWorld* world;
+//		FIntVector lower;
+//	public:
+//		ExtractionTask(APagedWorld* world, FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/) {
+//			this->world = world;
+//			this->lower = lower;
+//		}
+//
+//		FORCEINLINE TStatId GetStatId() const
+//		{
+//			RETURN_QUICK_DECLARE_CYCLE_STAT(ExtractionTask, STATGROUP_ThreadPoolAsyncTasks);
+//		}
+//
+//		void DoWork() {
+//			FExtractionTaskOutput output;
+//			output.pos = lower;
+//
+//			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z), PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE, lower.Z + REGION_SIZE));
+//			auto ExtractedMesh = PolyVox::extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
+//
+//			auto DecodedMesh = PolyVox::decodeMesh(ExtractedMesh);
+//
+//			output.decoded = DecodedMesh;
+//
+//			world->extractionQueue.Enqueue(output);
+//		}
+//	};
+//	////////////////////////////////////////////////////////////////////////
+//};
