@@ -66,7 +66,7 @@ void APagedRegion::BeginPlay()
 	rMesh = NewObject<URuntimeMeshComponent>(this, URuntimeMeshComponent::StaticClass());//, *compName);
 	rMesh->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepWorldTransform);
 	rMesh->BodyInstance.SetResponseToAllChannels(ECR_Block);
-	rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the queues as far as i can tell
+	rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the render queues as far as i can tell
 	rMesh->RegisterComponent();
 }
 
