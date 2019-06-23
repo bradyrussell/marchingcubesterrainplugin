@@ -190,6 +190,11 @@ void APagedWorld::beginWorldGeneration(FIntVector pos)
 	(new FAutoDeleteAsyncTask<WorldGenThread::RegionGenerationTask>(this, pos))->StartBackgroundTask();
 }
 
+int32 APagedWorld::getVolumeMemoryBytes()
+{
+	return VoxelVolume.Get()->calculateSizeInBytes();
+}
+
 
 WorldPager::WorldPager(APagedWorld *World) :world(World)
 {

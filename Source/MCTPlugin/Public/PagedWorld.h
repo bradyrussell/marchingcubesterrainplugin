@@ -138,6 +138,8 @@ public:
 
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 
+	UFUNCTION(Category = "Voxel Terrain - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
+
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
 
