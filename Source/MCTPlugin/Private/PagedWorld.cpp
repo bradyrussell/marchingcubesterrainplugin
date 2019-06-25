@@ -13,12 +13,24 @@ APagedWorld::APagedWorld()
 APagedWorld::~APagedWorld()
 {
 	VoxelVolume.Reset();
+	delete worldDB;
 }
 
 // Called when the game starts or when spawned
 void APagedWorld::BeginPlay()
 {
 	Super::BeginPlay();
+
+	leveldb::Options options;
+	options.create_if_missing = true;
+
+	FString dbname = FPaths::ProjectSavedDir() + DB_NAME;
+
+	leveldb::Status status = leveldb::DB::Open(options, std::string(TCHAR_TO_UTF8(*dbname)), &worldDB);
+
+	bool b = status.ok();
+	assert(status.ok());
+	UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %d"), *dbname,b);
 }
 
 // Called every frame
@@ -80,12 +92,14 @@ void APagedWorld::Tick(float DeltaTime)
 		}
 	}
 
+	auto dirtyClone = dirtyRegions;
+	dirtyRegions.Reset(); // leave slack
 	// do region updates
-	for (auto& region : dirtyRegions){ // if we render unloaded regions we get cascading world gen
+	for (auto& region : dirtyClone){ // if we render unloaded regions we get cascading world gen
 		if (regions.Contains(region)) getRegionAt(region)->SlowRender();
 		//if (regions.Contains(region)) QueueRegionRender(region);
 	}
-	dirtyRegions.Empty();
+	//dirtyRegions.Reset(); // leave slack
 
 	//while (!extractionQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount
 	//	FExtractionTaskOutput gen;
@@ -114,22 +128,28 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 {
 	if (regions.Contains(pos)) return regions.FindRef(pos);
 
-	UE_LOG(LogTemp, Warning, TEXT("Spawning a new region actor at %s."),*pos.ToString());
-	APagedRegion * region = GetWorld()->SpawnActor<APagedRegion>(APagedRegion::StaticClass(), FTransform(FRotator(0, 0, 0),FVector(pos),FVector(1,1,1)));
-	region->world = this;
-	regions.Add(pos,region);
-	return region;
+	//FActorSpawnParameters param;
+	FVector fpos = FVector(pos);
+
+	UE_LOG(LogTemp, Warning, TEXT("Spawning a new region actor at %s."), *pos.ToString());
+
+
+	try {
+		APagedRegion * region = GetWorld()->SpawnActor<APagedRegion>(APagedRegion::StaticClass(), fpos, FRotator::ZeroRotator);
+		region->world = this;
+		regions.Add(pos, region);
+		return region;
+	}
+	catch (...) {
+		UE_LOG(LogTemp, Warning, TEXT("Exception spawning a new region actor at %s."), *pos.ToString());
+		return nullptr;
+	}
 }
 
  void APagedWorld::QueueRegionRender(FIntVector pos)
 {
 	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
 }
-
-// void APagedWorld::QueueRegionRender(FIntVector pos)
-//{
-//	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
-//}
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 	dirtyRegions.Emplace(pos);
@@ -154,6 +174,14 @@ void APagedWorld::GenerateWorldRadius(FIntVector pos, int32 radius)
 			}
 		}
 	}
+}
+
+void APagedWorld::LoadOrGenerateWorldRadius(FIntVector pos, int32 radius)
+{
+	auto reg = PolyVox::Region(pos.X, pos.Y, pos.Z, pos.X + REGION_SIZE, pos.Y + REGION_SIZE, pos.Z + REGION_SIZE);
+	reg.grow(radius*REGION_SIZE);
+	VoxelVolume.Get()->prefetch(reg);
+	GenerateWorldRadius(pos,radius);
 }
 
 bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical)
@@ -185,6 +213,7 @@ FIntVector APagedWorld::WorldToVoxelCoords(FVector world)
 
 void APagedWorld::beginWorldGeneration(FIntVector pos)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Beginning world generation for region at %s."), *pos.ToString());
 	getRegionAt(pos); // create the actor
 	remainingRegionsToGenerate++;
 	(new FAutoDeleteAsyncTask<WorldGenThread::RegionGenerationTask>(this, pos))->StartBackgroundTask();
@@ -204,71 +233,114 @@ void WorldPager::pageIn(const PolyVox::Region & region, PolyVox::PagedVolume<Pol
 {
 	FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
-	if (!world->regions.Contains(pos)) {
-		//UE_LOG(LogTemp, Warning, TEXT("Paging in actorless region at %s."), *pos.ToString()); // no idea why this happens
+	bool regionExists = world->ReadChunkFromDatabase(world->worldDB, pos, pChunk);
+
+	if (regionExists) {
+		UE_LOG(LogTemp, Warning, TEXT("[db] Paging in EXISTING region %s."), *pos.ToString());
+		auto reg = world->getRegionAt(pos); // create the actor
+		world->MarkRegionDirtyAndAdjacent(pos); //concurrent access
 	}
 	else {
-		//UE_LOG(LogTemp, Warning, TEXT("Paging in ok region at %s."), *pos.ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("[db] Paging in NON-EXISTANT region %s."), *pos.ToString());
 	}
 
+	if (!world->regions.Contains(pos)) {
+		//UE_LOG(LogTemp, Warning, TEXT("Paging in actorless region at %s."), *pos.ToString()); // no idea why this happens // must be peeking, they dont save
+	}
+	else {
+	//	UE_LOG(LogTemp, Warning, TEXT("Paging in ok region at %s."), *pos.ToString());
+	}
 
 	//world->beginWorldGeneration(pos);
-
 	return;
 }
 
+
 void WorldPager::pageOut(const PolyVox::Region & region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk)
 {
-
-//	PolyVox::saveVolume();
+	FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
+	world->SaveChunkToDatabase(world->worldDB, pos, pChunk);
+	UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
 }
 
-//void WorldPager::GenerateNewChunk(const PolyVox::Region & region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk) {
-//	UUFNNoiseGenerator* material;
-//	UUFNNoiseGenerator* heightmap;
-//	UUFNNoiseGenerator* biome;
-//
-//	world->GetNoiseGenerators(material, heightmap, biome);
-//
-//	PolyVox::MaterialDensityPair88 Voxel;
-//
-//	if (!(IsValid(material) && IsValid(heightmap) && IsValid(biome))) {
-//		
-//		for (int32 x = region.getLowerX(); x <= region.getUpperX(); x++)
-//		{
-//			for (int32 y = region.getLowerY(); y <= region.getUpperY(); y++)
-//			{
-//				for (int32 z = region.getLowerZ(); z <= region.getUpperZ(); z++)
-//				{
-//					Voxel.setMaterial(((abs(x+y+z)) % 3) + 1);
-//					Voxel.setDensity(250);
-//
-//					if (z > 30) {
-//						Voxel.setMaterial(0);
-//						Voxel.setDensity(0);
-//					}
-//
-//					pChunk->setVoxel(x - region.getLowerX(), y - region.getLowerY(), z - region.getLowerZ(), Voxel);
-//				}
-//			}
-//		}
-//		return;
-//	}
-//
-//	// generate
-//	for (int32 x = region.getLowerX(); x <= region.getUpperX(); x++)
-//	{
-//		for (int32 y = region.getLowerY(); y <= region.getUpperY(); y++)
-//		{
-//			for (int32 z = region.getLowerZ(); z <= region.getUpperZ(); z++)
-//			{
-//				//auto v = WorldGen::Interpret_AlienSpires(x, y, z, material, heightmap, biome);
-//				auto v = WorldGen::Interpret_Basic(x, y, z, material, heightmap, biome);
-//
-//				pChunk->setVoxel(x - region.getLowerX(), y - region.getLowerY(), z - region.getLowerZ(), v);
-//			}
-//		}
-//	}
-//
-//	return;
-//}
+
+std::string SerializeLocationString(int32_t X, int32_t Y, int32_t Z, char W) {
+	char byteBuf[13];
+	uint32_t uX = X;
+	uint32_t uY = Y;
+	uint32_t uZ = Z;
+
+	byteBuf[0] = uX;
+	byteBuf[1] = uX >> 8;
+	byteBuf[2] = uX >> 16;
+	byteBuf[3] = uX >> 24;
+
+	byteBuf[4] = uY;
+	byteBuf[5] = uY >> 8;
+	byteBuf[6] = uY >> 16;
+	byteBuf[7] = uY >> 24;
+
+	byteBuf[8] = uZ;
+	byteBuf[9] = uZ >> 8;
+	byteBuf[10] = uZ >> 16;
+	byteBuf[11] = uZ >> 24;
+
+	byteBuf[12] = W;
+	return std::string(byteBuf, 13);
+}
+
+
+void APagedWorld::SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk)
+{ // todo make batched write
+	for (char w = 0; w < REGION_SIZE; w++) {
+		char byteBuf[2*REGION_SIZE*REGION_SIZE]; // 2kb for 32^2
+
+		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
+
+		for (char x = 0; x < REGION_SIZE; x++) {
+			for (char y = 0; y < REGION_SIZE; y++) {
+
+				auto uVoxel = pChunk->getVoxel(x,y,w);
+
+				char mat = uVoxel.getMaterial(); // unsigned -> signed conversion
+				char den = uVoxel.getDensity();
+
+				byteBuf[n++] = mat;
+				byteBuf[n++] = den;
+				//UE_LOG(LogTemp, Warning, TEXT("[debug] m%d d%d  n%d"), mat,den,n);
+			}
+		}
+
+		db->Put(leveldb::WriteOptions(),SerializeLocationString(pos.X, pos.Y, pos.Z, w), std::string(byteBuf, 2*REGION_SIZE*REGION_SIZE));
+	}
+}
+
+bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk)
+{
+	for (char w = 0; w < REGION_SIZE; w++) {
+		std::string chunkData;
+		auto status = db->Get(leveldb::ReadOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, w), &chunkData);
+
+		if (status.IsNotFound()) {
+			if(w > 0) UE_LOG(LogTemp, Warning, TEXT("Loading failed partway through %s region : failed at layer %d. Region data unrecoverable."), *pos.ToString(), w);
+			return false;
+		}
+
+		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
+
+		for (char x = 0; x < REGION_SIZE; x++) {
+			for (char y = 0; y < REGION_SIZE; y++) {
+				
+				unsigned char mat = chunkData[n++]; // signed - > unsigned conversion
+				unsigned char den = chunkData[n++];
+
+				//auto voxel = PolyVox::MaterialDensityPair88(mat,den);
+
+				pChunk->setVoxel(x, y, w, PolyVox::MaterialDensityPair88(mat, den));
+			}
+		}
+
+	}
+
+	return true;
+}

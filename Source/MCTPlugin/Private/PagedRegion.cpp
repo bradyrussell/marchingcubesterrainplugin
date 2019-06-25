@@ -66,9 +66,16 @@ void APagedRegion::BeginPlay()
 	rMesh = NewObject<URuntimeMeshComponent>(this, URuntimeMeshComponent::StaticClass());//, *compName);
 	rMesh->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepWorldTransform);
 	rMesh->BodyInstance.SetResponseToAllChannels(ECR_Block);
-	rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the render queues as far as i can tell
+	
+	/// DISABLING THIS STOPS THE NAN ERROR. 
+	//rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the render queues as far as i can tell
+
 	rMesh->RegisterComponent();
 }
+
+
+
+
 
 void APagedRegion::SlowRender()
 {
@@ -77,19 +84,17 @@ void APagedRegion::SlowRender()
 	FVector OffsetLocation = GetActorLocation();
 
 	PolyVox::Region ToExtract(PolyVox::Vector3DInt32(OffsetLocation.X, OffsetLocation.Y, OffsetLocation.Z), PolyVox::Vector3DInt32(OffsetLocation.X + REGION_SIZE, OffsetLocation.Y + REGION_SIZE, OffsetLocation.Z + REGION_SIZE));
-	//ToExtract.shrink(1);
-	auto ExtractedMesh = PolyVox::extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
 
-	//lock mutx
-	//auto ExtractedMesh = PolyVox::extractCubicMesh(world->VoxelVolume.Get(), ToExtract);
-	//unlock
+	#if MARCHING_CUBES == 1
+		auto ExtractedMesh = PolyVox::extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
+	#else
+		auto ExtractedMesh = PolyVox::extractCubicMesh(world->VoxelVolume.Get(), ToExtract);
+	#endif
 
 	auto DecodedMesh = PolyVox::decodeMesh(ExtractedMesh);
 
 	if (DecodedMesh.getNoOfIndices() == 0)
 		return;
-
-	//UE_LOG(LogTemp, Warning, TEXT("oof array len is %d."), DecodedMesh.getNoOfIndices());
 
 	for (int32 Material = 0; Material < world->TerrainMaterials.Num(); Material++)
 	{

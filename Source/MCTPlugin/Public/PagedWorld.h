@@ -9,7 +9,7 @@
 #include "PolyVox/Mesh.h"
 #include "GameFramework/Actor.h"
 #include "RuntimeMeshComponent.h"
-//#include "PagedRegion.h"
+#include "LevelDatabase.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WorldGenInterpreters.h"
@@ -21,7 +21,9 @@ class UTerrainPagingComponent;
 #define REGION_SIZE 32
 #define VOXEL_SIZE 100
 #define MAX_MATERIALS 4
+#define MARCHING_CUBES 1
 
+#define DB_NAME "WorldDatabase"
 
 
 USTRUCT(BlueprintType)
@@ -73,17 +75,6 @@ struct FWorldGenerationTaskOutput //
 	PolyVox::MaterialDensityPair88 voxel[32][32][32]; // ~ 500 kb
 };
 
-//USTRUCT(BlueprintType)
-//struct FExtractionTaskOutput // 
-//{
-//	GENERATED_BODY()
-//
-//		UPROPERTY(BlueprintReadWrite, Category = "Extraction Task")
-//		FIntVector pos;
-//
-//	PolyVox::Mesh<PolyVox::Vertex<PolyVox::MaterialDensityPair88>, unsigned int> decoded;
-//};
-
 
 UCLASS()
 class MCTPLUGIN_API APagedWorld : public AActor
@@ -124,6 +115,8 @@ public:
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable)void GenerateWorldRadius(FIntVector pos, int32 radius);
 
+	UFUNCTION(Category = "Voxel World", BlueprintCallable)void LoadOrGenerateWorldRadius(FIntVector pos, int32 radius);
+
 	//debug mod terrain
 	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical);
 
@@ -140,6 +133,9 @@ public:
 
 	UFUNCTION(Category = "Voxel Terrain - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
 
+	void SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
+	bool ReadChunkFromDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
+
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
 
@@ -149,6 +145,8 @@ public:
 
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
+
+	leveldb::DB *worldDB;
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager
@@ -164,9 +162,7 @@ public:
 	virtual void pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
 	virtual void pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
 
-	void GenerateNewChunk(const PolyVox::Region & region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
-
-	FCriticalSection VolumeMutex;
+	//FCriticalSection VolumeMutex;
 
 	APagedWorld* world;
 public:
@@ -336,37 +332,3 @@ namespace ExtractionThread {
 	};
 	////////////////////////////////////////////////////////////////////////
 };
-
-//namespace ExtractionThread {
-//	////////////////////////////////////////////////////////////////////////
-//	class ExtractionTask : public FNonAbandonableTask {
-//		friend class FAutoDeleteAsyncTask<ExtractionTask>;
-//		APagedWorld* world;
-//		FIntVector lower;
-//	public:
-//		ExtractionTask(APagedWorld* world, FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/) {
-//			this->world = world;
-//			this->lower = lower;
-//		}
-//
-//		FORCEINLINE TStatId GetStatId() const
-//		{
-//			RETURN_QUICK_DECLARE_CYCLE_STAT(ExtractionTask, STATGROUP_ThreadPoolAsyncTasks);
-//		}
-//
-//		void DoWork() {
-//			FExtractionTaskOutput output;
-//			output.pos = lower;
-//
-//			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z), PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE, lower.Z + REGION_SIZE));
-//			auto ExtractedMesh = PolyVox::extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
-//
-//			auto DecodedMesh = PolyVox::decodeMesh(ExtractedMesh);
-//
-//			output.decoded = DecodedMesh;
-//
-//			world->extractionQueue.Enqueue(output);
-//		}
-//	};
-//	////////////////////////////////////////////////////////////////////////
-//};

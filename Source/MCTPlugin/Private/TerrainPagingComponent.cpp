@@ -42,7 +42,7 @@ void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	world->GenerateWorldRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())), viewDistance);
+	world->LoadOrGenerateWorldRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())), viewDistance);
 	//world->MarkRegionDirtyAndSurrounding(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())),viewDistance);
 	// ...
 }
