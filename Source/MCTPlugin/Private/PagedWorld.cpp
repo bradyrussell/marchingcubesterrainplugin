@@ -30,6 +30,7 @@ void APagedWorld::BeginPlay()
 
 	bool b = status.ok();
 	assert(status.ok());
+
 	UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %d"), *dbname,b);
 }
 
@@ -39,7 +40,7 @@ void APagedWorld::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	// pop render queue
 	// queue is multi input single consumer
-	if (!worldGenerationQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount
+	if (!worldGenerationQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount, but also may cause more redraws due to dirty regions
 
 		FWorldGenerationTaskOutput gen;
 		worldGenerationQueue.Dequeue(gen);
@@ -170,7 +171,10 @@ void APagedWorld::GenerateWorldRadius(FIntVector pos, int32 radius)
 		for (int y = -radius; y <= radius; y++) {
 			for (int x = -radius; x <= radius; x++) {
 				FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE*z); // -z means we gen higher regions first?
-				if (!regions.Contains(surrounding)) beginWorldGeneration(surrounding);
+				if (regionsOnDisk.Contains(surrounding)) {
+					getRegionAt(pos); // spawn actor
+					MarkRegionDirtyAndAdjacent(pos);
+				} else if (!regions.Contains(surrounding)) beginWorldGeneration(surrounding);
 			}
 		}
 	}
@@ -214,6 +218,7 @@ FIntVector APagedWorld::WorldToVoxelCoords(FVector world)
 void APagedWorld::beginWorldGeneration(FIntVector pos)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Beginning world generation for region at %s."), *pos.ToString());
+
 	getRegionAt(pos); // create the actor
 	remainingRegionsToGenerate++;
 	(new FAutoDeleteAsyncTask<WorldGenThread::RegionGenerationTask>(this, pos))->StartBackgroundTask();
@@ -240,23 +245,25 @@ void WorldPager::pageIn(const PolyVox::Region & region, PolyVox::PagedVolume<Pol
 
 	bool regionExists = world->ReadChunkFromDatabase(world->worldDB, pos, pChunk);
 
-	if (regionExists) {
+	if (regionExists) { // todo fix 
 		UE_LOG(LogTemp, Warning, TEXT("[db] Paging in EXISTING region %s."), *pos.ToString());
-		auto reg = world->getRegionAt(pos); // create the actor
-		world->MarkRegionDirtyAndAdjacent(pos); //concurrent access
+		world->regionsOnDisk.Emplace(pos);
+		//auto reg = world->getRegionAt(pos); // create the actor
+		//world->MarkRegionDirtyAndAdjacent(pos); //concurrent access
 	}
-	else {
-		//UE_LOG(LogTemp, Warning, TEXT("[db] Paging in NON-EXISTANT region %s."), *pos.ToString());
-	}
+	//else {
+	//	//UE_LOG(LogTemp, Warning, TEXT("[db] Paging in NON-EXISTANT region %s."), *pos.ToString());
+	//}
 
-	if (!world->regions.Contains(pos)) {
-		//UE_LOG(LogTemp, Warning, TEXT("Paging in actorless region at %s."), *pos.ToString()); // no idea why this happens // must be peeking, they dont save
-	}
-	else {
-	//	UE_LOG(LogTemp, Warning, TEXT("Paging in ok region at %s."), *pos.ToString());
-	}
+	//if (!world->regions.Contains(pos)) {
+	//	//UE_LOG(LogTemp, Warning, TEXT("Paging in actorless region at %s."), *pos.ToString()); // no idea why this happens // must be peeking, they dont save
+	//}
+	//else {
+	////	UE_LOG(LogTemp, Warning, TEXT("Paging in ok region at %s."), *pos.ToString());
+	//}
 
 	//world->beginWorldGeneration(pos);
+
 	return;
 }
 

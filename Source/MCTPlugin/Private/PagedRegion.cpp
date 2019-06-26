@@ -82,8 +82,6 @@ void APagedRegion::BeginPlay()
 
 void APagedRegion::SlowRender()
 {
-	//(new FAutoDeleteAsyncTask<ExtractionThread::SurfaceExtractionTask>(this, FIntVector(GetActorLocation())))->StartBackgroundTask(); horribly broken
-	
 	FVector OffsetLocation = GetActorLocation();
 
 	PolyVox::Region ToExtract(PolyVox::Vector3DInt32(OffsetLocation.X, OffsetLocation.Y, OffsetLocation.Z), PolyVox::Vector3DInt32(OffsetLocation.X + REGION_SIZE, OffsetLocation.Y + REGION_SIZE, OffsetLocation.Z + REGION_SIZE));

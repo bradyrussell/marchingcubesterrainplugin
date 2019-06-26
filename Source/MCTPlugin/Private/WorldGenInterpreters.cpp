@@ -1,4 +1,5 @@
 #include "WorldGenInterpreters.h"
+#include "PagedWorld.h"
 
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_Woods(int32 x, int32 y, int32 z, UUFNNoiseGenerator * material, UUFNNoiseGenerator * heightmap, UUFNNoiseGenerator * biome)
 {
@@ -78,5 +79,48 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 		Voxel.setMaterial(r);
 		Voxel.setDensity(g);
 	}
+	return Voxel;
+}
+
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise)
+{
+	PolyVox::MaterialDensityPair88 Voxel;
+	auto _height = noise[0]->GetNoise2D(x, y);
+	//only evaluate noise when you will need it; its expensive
+
+	if (z > _height) { // Above maximum height
+		Voxel.setMaterial(MATERIAL_AIR);
+		Voxel.setDensity(0);
+		return Voxel;
+	}
+	else {
+		//auto _material = noise[1]->GetNoise3D(x, y, z);
+		//auto _temperature = noise[2]->GetNoise2D(x, y);
+		//auto _moisture = noise[3]->GetNoise2D(x, y);
+		auto _caves = noise[4]->GetNoise3D(x, y, z);
+		auto _moisture = 1;
+
+		if (z < _height - 24 && _caves > .5) { // caves 24m+ deep
+			Voxel.setMaterial(MATERIAL_AIR);
+			Voxel.setDensity(0);
+			return Voxel;
+		}
+
+		if (z + 4 > _height) { // grass layer
+			Voxel.setMaterial(MATERIAL_DIRT);
+			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
+		} else if(z + 280 > _height) { //stone layer
+			Voxel.setMaterial(MATERIAL_STONE);
+			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
+		} else if (z + 400 > _height) { // gold layer
+			Voxel.setMaterial(MATERIAL_ORE);
+			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
+		} else { // bedrock
+			Voxel.setMaterial(MATERIAL_WOOD);
+			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
+		}
+
+	}
+
 	return Voxel;
 }

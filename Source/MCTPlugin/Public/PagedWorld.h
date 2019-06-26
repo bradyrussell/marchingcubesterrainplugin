@@ -22,9 +22,10 @@ class UTerrainPagingComponent;
 #define VOXEL_SIZE 100
 #define MAX_MATERIALS 4
 #define MARCHING_CUBES 1
-#define ASYNC_COLLISION true
+#define ASYNC_COLLISION false
 
 #define DB_NAME "WorldDatabase"
+
 
 
 USTRUCT(BlueprintType)
@@ -73,7 +74,7 @@ struct FWorldGenerationTaskOutput //
 	UPROPERTY(BlueprintReadWrite, Category = "WorldGen Task")
 	FIntVector pos;
 
-	PolyVox::MaterialDensityPair88 voxel[32][32][32]; 
+	PolyVox::MaterialDensityPair88 voxel[REGION_SIZE][REGION_SIZE][REGION_SIZE];
 };
 
 
@@ -83,65 +84,53 @@ class MCTPLUGIN_API APagedWorld : public AActor
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this actor's properties
 	APagedWorld();
 	~APagedWorld();
 
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	virtual void PostInitializeComponents() override;
 
 public:
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-	UFUNCTION(BlueprintImplementableEvent) void GetNoiseGenerators(UUFNNoiseGenerator* &material,UUFNNoiseGenerator* &heightmap,UUFNNoiseGenerator* &biome);
 
-	// The procedurally generated mesh that represents our voxels
-	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere)
-	TMap<FIntVector, APagedRegion*> regions;
+	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
+	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
+	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) TArray<UMaterialInterface*> TerrainMaterials;
+	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 
-	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere)
-		TArray<UTerrainPagingComponent*> pagingComponents;
+	// get region
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 
-	UPROPERTY(Category = "Voxel Terrain - Terrain Settings", BlueprintReadWrite, EditAnywhere) TArray<UMaterialInterface*> TerrainMaterials;
-
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
-
+	//render
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void QueueRegionRender(FIntVector pos);
-
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 
-	UFUNCTION(Category = "Voxel World", BlueprintCallable)void GenerateWorldRadius(FIntVector pos, int32 radius);
+	// terrain modification
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical);
 
-	UFUNCTION(Category = "Voxel World", BlueprintCallable)void LoadOrGenerateWorldRadius(FIntVector pos, int32 radius);
-
-	//debug mod terrain
-	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical);
-
-
-	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure)
-	static FIntVector VoxelToRegionCoords(FIntVector voxel);
-
-	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure)
-	static FIntVector WorldToVoxelCoords(FVector world);
-
+	// coordinates
+	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector voxel);
+	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure) static FIntVector WorldToVoxelCoords(FVector world);
+	
+	// world gen
+	UFUNCTION(BlueprintImplementableEvent) TArray<UUFNNoiseGenerator*>  GetNoiseGeneratorArray();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void beginWorldGeneration(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void GenerateWorldRadius(FIntVector pos, int32 radius);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void LoadOrGenerateWorldRadius(FIntVector pos, int32 radius);
 
-	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
-
-	UFUNCTION(Category = "Voxel Terrain - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
-
-	UFUNCTION(Category = "Voxel Terrain - Volume Memory", BlueprintCallable) void Flush();
+	// memory
+	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
+	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) void Flush();
 
 	void SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
 	bool ReadChunkFromDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
 
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
-
+	// todo make queue
 	TSet<FIntVector> dirtyRegions; // region keys which need redrawn; either because their voxels were modified or because they were just created
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
@@ -149,26 +138,21 @@ public:
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 
+	TSet<FIntVector> regionsOnDisk;
+
 	leveldb::DB *worldDB;
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager
 {
 public:
-	// Constructor
 	WorldPager(APagedWorld* World);
-
-	// Destructor
 	virtual ~WorldPager() {};
 
-	// PagedVolume::Pager functions
 	virtual void pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
 	virtual void pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
 
-	//FCriticalSection VolumeMutex;
-
 	APagedWorld* world;
-public:
 };
 
 // Bridge between PolyVox Vector3DFloat and Unreal Engine 4 FVector
@@ -207,32 +191,26 @@ struct FPolyVoxVector : public FVector
 	}
 };
 
-namespace WorldGenThread {
+namespace WorldGenThread { 
 	////////////////////////////////////////////////////////////////////////
 	class RegionGenerationTask : public FNonAbandonableTask {
 		friend class FAutoDeleteAsyncTask<RegionGenerationTask>;
 		APagedWorld* world;
 		FIntVector lower;
-		//PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk;
 	public:
 		RegionGenerationTask(APagedWorld* world, FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/) {
 			this->world = world;
 			this->lower = lower;
-			//this->pChunk = pChunk;
 		}
 
 		FORCEINLINE TStatId GetStatId() const
 		{
 			RETURN_QUICK_DECLARE_CYCLE_STAT(RegionGenerationTask, STATGROUP_ThreadPoolAsyncTasks);
 		}
-		//pChunk->setVoxel(x + lower.X, y + lower.Y, z + lower.Z, v);//world pos
-		void DoWork() {
-			UUFNNoiseGenerator* material;
-			UUFNNoiseGenerator* heightmap;
-			UUFNNoiseGenerator* biome;
-			
-			world->GetNoiseGenerators(material, heightmap, biome);
 
+		void DoWork() {
+			TArray<UUFNNoiseGenerator*> noise = world->GetNoiseGeneratorArray();
+			
 			FWorldGenerationTaskOutput output;
 			output.pos = lower;
 
@@ -240,7 +218,7 @@ namespace WorldGenThread {
 			for (int32 x = 0; x < REGION_SIZE; x++){
 				for (int32 y = 0; y < REGION_SIZE; y++){
 					for (int32 z = 0; z < REGION_SIZE; z++){ // todo save function ptr to interp as param that way we can change them on the fly
-						output.voxel[x][y][z] = WorldGen::Interpret_Woods(x + lower.X, y + lower.Y, z + lower.Z, material, heightmap, biome);
+						output.voxel[x][y][z] = WorldGen::Interpret_Mars(x + lower.X, y + lower.Y, z + lower.Z, noise);
 					}
 				}
 			}
