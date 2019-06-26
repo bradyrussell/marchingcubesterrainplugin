@@ -112,7 +112,7 @@ void APagedWorld::Tick(float DeltaTime)
 
 void APagedWorld::PostInitializeComponents() {
 
-	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this)));
+	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this)));//,256*1024*1024,REGION_SIZE));
 
 	// Call the base class's function.
 	Super::PostInitializeComponents();
@@ -222,6 +222,11 @@ void APagedWorld::beginWorldGeneration(FIntVector pos)
 int32 APagedWorld::getVolumeMemoryBytes()
 {
 	return VoxelVolume.Get()->calculateSizeInBytes();
+}
+
+void APagedWorld::Flush()
+{
+	VoxelVolume.Get()->flushAll();
 }
 
 

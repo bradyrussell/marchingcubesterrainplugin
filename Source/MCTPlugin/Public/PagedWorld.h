@@ -22,6 +22,7 @@ class UTerrainPagingComponent;
 #define VOXEL_SIZE 100
 #define MAX_MATERIALS 4
 #define MARCHING_CUBES 1
+#define ASYNC_COLLISION true
 
 #define DB_NAME "WorldDatabase"
 
@@ -72,7 +73,7 @@ struct FWorldGenerationTaskOutput //
 	UPROPERTY(BlueprintReadWrite, Category = "WorldGen Task")
 	FIntVector pos;
 
-	PolyVox::MaterialDensityPair88 voxel[32][32][32]; // ~ 500 kb
+	PolyVox::MaterialDensityPair88 voxel[32][32][32]; 
 };
 
 
@@ -132,6 +133,8 @@ public:
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 
 	UFUNCTION(Category = "Voxel Terrain - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
+
+	UFUNCTION(Category = "Voxel Terrain - Volume Memory", BlueprintCallable) void Flush();
 
 	void SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
 	bool ReadChunkFromDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);

@@ -68,7 +68,10 @@ void APagedRegion::BeginPlay()
 	rMesh->BodyInstance.SetResponseToAllChannels(ECR_Block);
 	
 	/// DISABLING THIS STOPS THE NAN ERROR. 
-	//rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the render queues as far as i can tell
+
+	#if ASYNC_COLLISION == true 
+	rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the render queues as far as i can tell
+	#endif
 
 	rMesh->RegisterComponent();
 }
