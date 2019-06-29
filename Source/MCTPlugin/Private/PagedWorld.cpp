@@ -1,6 +1,7 @@
 #include "PagedWorld.h"
 #include "WorldGenInterpreters.h"
 #include "PagedRegion.h"
+#include "TerrainPagingComponent.h"
 
 // Sets default values
 APagedWorld::APagedWorld()
@@ -55,7 +56,7 @@ void APagedWorld::Tick(float DeltaTime)
 		}
 
 		//dirtyRegions.Emplace(gen.pos);
-		MarkRegionDirtyAndAdjacent(gen.pos);
+		//MarkRegionDirtyAndAdjacent(gen.pos);
 	}
 
 
@@ -97,17 +98,13 @@ void APagedWorld::Tick(float DeltaTime)
 	dirtyRegions.Reset(); // leave slack
 	// do region updates
 	for (auto& region : dirtyClone){ // if we render unloaded regions we get cascading world gen
-		if (regions.Contains(region)) getRegionAt(region)->SlowRender();
+		if (regions.Contains(region)) {
+			auto reg = getRegionAt(region);
+			reg->SlowRender();
+			reg->UpdateNavigation();
+		}
 		//if (regions.Contains(region)) QueueRegionRender(region);
 	}
-	//dirtyRegions.Reset(); // leave slack
-
-	//while (!extractionQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount
-	//	FExtractionTaskOutput gen;
-	//	extractionQueue.Dequeue(gen);
-
-	//	getRegionAt(gen.region)->RenderParsed(gen);
-	//}
 
 }
 
@@ -139,6 +136,8 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 		APagedRegion * region = GetWorld()->SpawnActor<APagedRegion>(APagedRegion::StaticClass(), fpos, FRotator::ZeroRotator);
 		region->world = this;
 		regions.Add(pos, region);
+
+		MarkRegionDirtyAndAdjacent(pos);
 		return region;
 	}
 	catch (...) {
@@ -147,10 +146,10 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 	}
 }
 
- void APagedWorld::QueueRegionRender(FIntVector pos)
-{
-	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
-}
+// void APagedWorld::QueueRegionRender(FIntVector pos)
+//{
+//	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
+//}
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 	dirtyRegions.Emplace(pos);
@@ -167,14 +166,28 @@ void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 
 void APagedWorld::GenerateWorldRadius(FIntVector pos, int32 radius)
 {
+	//for (int z = -radius; z <= radius; z++) { // top down makes it feel faster
+	//	for (int y = -radius; y <= radius; y++) {
+	//		for (int x = -radius; x <= radius; x++) {
+	//			FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE*z); // -z means we gen higher regions first?
+	//			if (regionsOnDisk.Contains(surrounding)) {
+	//				getRegionAt(pos); // spawn actor
+	//				MarkRegionDirtyAndAdjacent(pos);
+	//			} else if (!regions.Contains(surrounding)) beginWorldGeneration(surrounding);
+	//		}
+	//	}
+	//}
+}
+
+void APagedWorld::TouchOrSpawnRadius(FIntVector pos, int32 radius)
+{
 	for (int z = -radius; z <= radius; z++) { // top down makes it feel faster
 		for (int y = -radius; y <= radius; y++) {
 			for (int x = -radius; x <= radius; x++) {
 				FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE*z); // -z means we gen higher regions first?
-				if (regionsOnDisk.Contains(surrounding)) {
-					getRegionAt(pos); // spawn actor
-					MarkRegionDirtyAndAdjacent(pos);
-				} else if (!regions.Contains(surrounding)) beginWorldGeneration(surrounding);
+
+				getRegionAt(surrounding)->Touch(); // spawns if doesnt exist
+
 			}
 		}
 	}
@@ -185,7 +198,7 @@ void APagedWorld::LoadOrGenerateWorldRadius(FIntVector pos, int32 radius)
 	auto reg = PolyVox::Region(pos.X, pos.Y, pos.Z, pos.X + REGION_SIZE, pos.Y + REGION_SIZE, pos.Z + REGION_SIZE);
 	reg.grow(radius*REGION_SIZE);
 	VoxelVolume.Get()->prefetch(reg);
-	GenerateWorldRadius(pos,radius);
+	//GenerateWorldRadius(pos,radius);
 }
 
 bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical)
@@ -219,7 +232,7 @@ void APagedWorld::beginWorldGeneration(FIntVector pos)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Beginning world generation for region at %s."), *pos.ToString());
 
-	getRegionAt(pos); // create the actor
+	//getRegionAt(pos); // create the actor
 	remainingRegionsToGenerate++;
 	(new FAutoDeleteAsyncTask<WorldGenThread::RegionGenerationTask>(this, pos))->StartBackgroundTask();
 }
@@ -234,6 +247,67 @@ void APagedWorld::Flush()
 	VoxelVolume.Get()->flushAll();
 }
 
+void APagedWorld::UnloadOldRegions()
+{
+	TArray<FIntVector> oldKeys;
+
+	for (auto& Elem : regions){ // get all stale regions
+		if (!Elem.Value->wasSeenWithin(FTimespan::FromSeconds(29))) {
+			oldKeys.Add(Elem.Key);
+		}
+	}
+
+	for (auto& Elem : oldKeys) { // remove them from map and destroy them
+		regions.FindAndRemoveChecked(Elem)->SetLifeSpan(.1);
+	}
+}
+
+void APagedWorld::PagingComponentTick()
+{
+	TSet<FIntVector> regionsToLoad;
+
+	for (auto& pager : pagingComponents){
+		int radius = pager->viewDistance;
+		FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
+
+		for (int z = -radius; z <= radius; z++) { // top down makes it feel faster
+			for (int y = -radius; y <= radius; y++) {
+				for (int x = -radius; x <= radius; x++) {
+					FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE * z); // -z means we gen higher regions first?
+
+					regionsToLoad.Emplace(surrounding);
+
+				}
+			}
+		}
+
+	}
+
+	UnloadRegionsExcept(regionsToLoad);
+}
+
+void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad)
+{
+	TArray<FIntVector> currentRegionsArr;
+	int num = regions.GetKeys(currentRegionsArr);
+	TSet<FIntVector> currentRegions(currentRegionsArr);
+
+	auto toUnload = currentRegions.Difference(regionsToLoad); // to unload
+	auto toLoad = regionsToLoad.Difference(currentRegions); // to load
+
+	for (auto& unload : toUnload){
+		regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1); 
+	}
+
+	for (auto& load : toLoad) {
+		if (!regions.Contains(load)) {
+			getRegionAt(load);
+			MarkRegionDirtyAndAdjacent(load);
+		}
+	}
+	
+}
+
 
 WorldPager::WorldPager(APagedWorld *World) :world(World)
 {
@@ -245,9 +319,10 @@ void WorldPager::pageIn(const PolyVox::Region & region, PolyVox::PagedVolume<Pol
 
 	bool regionExists = world->ReadChunkFromDatabase(world->worldDB, pos, pChunk);
 
-	if (regionExists) { // todo fix 
-		UE_LOG(LogTemp, Warning, TEXT("[db] Paging in EXISTING region %s."), *pos.ToString());
-		world->regionsOnDisk.Emplace(pos);
+	if (!regionExists) { // todo fix 
+		//UE_LOG(LogTemp, Warning, TEXT("[db] Paging in EXISTING region %s."), *pos.ToString());
+		world->beginWorldGeneration(pos);
+		//world->regionsOnDisk.Emplace(pos);
 		//auto reg = world->getRegionAt(pos); // create the actor
 		//world->MarkRegionDirtyAndAdjacent(pos); //concurrent access
 	}
@@ -268,11 +343,12 @@ void WorldPager::pageIn(const PolyVox::Region & region, PolyVox::PagedVolume<Pol
 }
 
 
+
 void WorldPager::pageOut(const PolyVox::Region & region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk)
 {
 	FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 	world->SaveChunkToDatabase(world->worldDB, pos, pChunk);
-	UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
 }
 
 
@@ -301,11 +377,30 @@ std::string SerializeLocationString(int32_t X, int32_t Y, int32_t Z, char W) {
 	return std::string(byteBuf, 13);
 }
 
+std::string ArchiveToString(TArray<uint8> & archive)
+{
+	return std::string((char*)archive.GetData(), archive.Num());
+}
+
+void ArchiveFromString(std::string input, TArray<uint8> & archive)
+{
+	int len = input.length();
+
+	if (archive.Num() > 0) archive.Empty(len);
+	archive.AddZeroed(len);
+
+	for (int i = 0; i < len; i++) {
+		archive[i] = (unsigned char)input[i];
+	}
+	//memcpy((void*)s, archive.GetData(), len); // both leave the zeroes , need to investigate
+	//FGenericPlatformMemory::Memcpy((void*)input.c_str(),archive.GetData(), len);
+}
+
 
 void APagedWorld::SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk)
 { // todo make batched write
-	for (char w = 0; w < REGION_SIZE; w++) {
-		char byteBuf[2*REGION_SIZE*REGION_SIZE]; // 2kb for 32^2
+	for (char w = 0; w < REGION_SIZE; w++) { // for each x,y layer
+		char byteBuf[2*REGION_SIZE*REGION_SIZE]; // 2kb for 32^2, material and density 1 byte each
 
 		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
 
@@ -356,3 +451,46 @@ bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox
 
 	return true;
 }
+
+void APagedWorld::SaveRegionalDataToDatabase(leveldb::DB * db, FIntVector pos, uint8 index, TArray<uint8> & archive)
+{	
+	db->Put(leveldb::WriteOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, index + REGION_SIZE), ArchiveToString(archive));
+}
+
+bool APagedWorld::LoadRegionalDataFromDatabase(leveldb::DB * db, FIntVector pos, uint8 index, TArray<uint8> & archive)
+{
+	std::string data;
+	auto status = db->Get(leveldb::ReadOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, index + REGION_SIZE), &data);
+
+	if (status.IsNotFound()) return false;
+
+	ArchiveFromString(data, archive);
+	return true;
+}
+
+void APagedWorld::SaveGlobalDataToDatabase(leveldb::DB * db, std::string key, TArray<uint8> & archive)
+{
+	db->Put(leveldb::WriteOptions(), DB_GLOBAL_TAG + key, ArchiveToString(archive));
+}
+
+bool APagedWorld::LoadGlobalDataFromDatabase(leveldb::DB * db, std::string key, TArray<uint8> & archive)
+{
+	std::string data;
+	auto status = db->Get(leveldb::ReadOptions(), DB_GLOBAL_TAG + key, &data);
+
+	if (status.IsNotFound()) return false;
+ 
+	ArchiveFromString(data, archive);
+	return true;
+}
+
+
+/// spiral loading 
+//
+//
+//for (int i = -rad; i < rad; i++) {
+//	doSpawn(i, -rad);
+//	doSpawn(i, rad-1);
+//	doSpawn(-rad, i);
+//	doSpawn(rad-1, i);
+//}

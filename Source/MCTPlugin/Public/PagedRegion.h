@@ -13,6 +13,7 @@
 
 //#include "LevelDatabase.h"
 
+#include "AI/NavigationSystemBase.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "PagedWorld.h"
@@ -45,10 +46,20 @@ public:
 
 	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* world;
 
-	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable)void SlowRender();
+	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) void SlowRender();
 	void RenderDecoded(PolyVox::Mesh<PolyVox::Vertex<PolyVox::MaterialDensityPair88>, unsigned int> decoded);
 
 	void RenderParsed(FExtractionTaskOutput output);
+
+	void UpdateNavigation();
+
+	// update the last seen to current time
+	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable)void Touch();
+
+	// check whether the region was seen in the last x period of time
+	UFUNCTION(Category = "Voxel Terrain", BlueprintCallable)bool wasSeenWithin(FTimespan timespan);
+
+	FDateTime lastSeen;
 private:
 
 };

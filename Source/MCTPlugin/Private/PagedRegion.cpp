@@ -74,6 +74,7 @@ void APagedRegion::BeginPlay()
 	#endif
 
 	rMesh->RegisterComponent();
+	Touch();
 }
 
 
@@ -271,4 +272,19 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output)
 		}
 	}
 	return;
+}
+
+void APagedRegion::UpdateNavigation()
+{
+	FNavigationSystem::UpdateComponentData(*rMesh);
+}
+
+void APagedRegion::Touch()
+{
+	lastSeen = FDateTime::UtcNow();
+}
+
+bool APagedRegion::wasSeenWithin(FTimespan timespan)
+{
+	return lastSeen + timespan >= FDateTime::UtcNow();
 }

@@ -10,7 +10,7 @@ UTerrainPagingComponent::UTerrainPagingComponent()
 {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bCanEverTick = false;
 	//PrimaryComponentTick.bRunOnAnyThread = true;
 	//PrimaryComponentTick.TickInterval = .5;
 	// ...
@@ -42,8 +42,8 @@ void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	world->LoadOrGenerateWorldRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())), viewDistance);
-	//world->MarkRegionDirtyAndSurrounding(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())),viewDistance);
+	//world->LoadOrGenerateWorldRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())), viewDistance);
+	//world->TouchOrSpawnRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())),viewDistance);
 	// ...
 }
 

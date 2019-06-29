@@ -84,6 +84,8 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise)
 {
+	if (noise.Num() == 0) return PolyVox::MaterialDensityPair88();
+
 	PolyVox::MaterialDensityPair88 Voxel;
 	auto _height = noise[0]->GetNoise2D(x, y);
 	//only evaluate noise when you will need it; its expensive

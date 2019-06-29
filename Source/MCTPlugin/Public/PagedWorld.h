@@ -10,23 +10,36 @@
 #include "GameFramework/Actor.h"
 #include "RuntimeMeshComponent.h"
 #include "LevelDatabase.h"
+#include "BufferArchive.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WorldGenInterpreters.h"
 #include "PagedWorld.generated.h"
 
-class APagedRegion;
-class UTerrainPagingComponent;
-
-#define REGION_SIZE 32
-#define VOXEL_SIZE 100
+// voxel config
+#define REGION_SIZE 32 //voxels
+#define VOXEL_SIZE 100 // cm
 #define MAX_MATERIALS 4
 #define MARCHING_CUBES 1
-#define ASYNC_COLLISION false
+#define ASYNC_COLLISION false//!WITH_EDITOR//false
+//#define REGION_UNLOAD_DELAY 10 //seconds
 
+// db config
 #define DB_NAME "WorldDatabase"
+#define DB_GLOBAL_TAG "MapGlobalData_" // 14 bytes or more so we dont conflict with region keys
 
+// regional data offsets, max of 255 - REGION_SIZE 
+#define REGIONAL_DATA_RESERVED 0
+#define REGIONAL_DATA_ENTITY 1
+#define REGIONAL_DATA_CONTAINER 2
+#define REGIONAL_DATA_RESOURCES 3
 
+#define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
+
+//end config
+
+class APagedRegion;
+class UTerrainPagingComponent;
 
 USTRUCT(BlueprintType)
 struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
@@ -105,7 +118,7 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 
 	//render
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) void QueueRegionRender(FIntVector pos);
+	//UFUNCTION(Category = "Voxel World", BlueprintCallable) void QueueRegionRender(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 
 	// terrain modification
@@ -119,14 +132,30 @@ public:
 	UFUNCTION(BlueprintImplementableEvent) TArray<UUFNNoiseGenerator*>  GetNoiseGeneratorArray();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void beginWorldGeneration(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void GenerateWorldRadius(FIntVector pos, int32 radius);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void TouchOrSpawnRadius(FIntVector pos, int32 radius);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void LoadOrGenerateWorldRadius(FIntVector pos, int32 radius);
 
 	// memory
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) void Flush();
 
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadOldRegions();
+
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void PagingComponentTick();
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
+
+	// save the actual voxel data to leveldb , stored under region coords X Y Z W where w 2kb is xy layers
 	void SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
 	bool ReadChunkFromDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk);
+
+	// save region-specific data to leveldb, for instance entities in the region or special local properties. 
+	// these are separated by indicies based on categories , ideally with decreasing order of relevance as they are ordered by index
+	void SaveRegionalDataToDatabase(leveldb::DB * db, FIntVector pos, uint8 index, TArray<uint8> &archive);
+	bool LoadRegionalDataFromDatabase(leveldb::DB * db, FIntVector pos, uint8 index, TArray<uint8> &archive);
+
+	//save map-wide data to leveldb. this is still map specific so universal properties should have their own db. because we prepend a 14 byte tag, the key can be anything including ""
+	void SaveGlobalDataToDatabase(leveldb::DB * db, std::string key, TArray<uint8> &archive);
+	bool LoadGlobalDataFromDatabase(leveldb::DB * db, std::string key, TArray<uint8> &archive);
 
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
@@ -134,11 +163,12 @@ public:
 	TSet<FIntVector> dirtyRegions; // region keys which need redrawn; either because their voxels were modified or because they were just created
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
+	//TQueue<FIntVector, EQueueMode::Mpsc> dirtyRegions;
 
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 
-	TSet<FIntVector> regionsOnDisk;
+	//TSet<FIntVector> regionsOnDisk;
 
 	leveldb::DB *worldDB;
 };
