@@ -23,7 +23,7 @@
 #define MAX_MATERIALS 4
 #define MARCHING_CUBES 1
 #define ASYNC_COLLISION true//!WITH_EDITOR//false
-//#define REGION_UNLOAD_DELAY 10 //seconds
+
 
 #define WORLD_TICK_TRACKING
 
@@ -124,7 +124,7 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 
 	//render
-	//UFUNCTION(Category = "Voxel World", BlueprintCallable) void QueueRegionRender(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void QueueRegionRender(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 
 	// terrain modification

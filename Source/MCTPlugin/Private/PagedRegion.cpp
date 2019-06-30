@@ -74,7 +74,7 @@ void APagedRegion::BeginPlay()
 	#endif
 
 	rMesh->RegisterComponent();
-	Touch();
+	//Touch();
 }
 
 

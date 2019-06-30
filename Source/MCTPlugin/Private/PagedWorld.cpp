@@ -6,7 +6,8 @@
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
 DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
-DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);//WorldClearExtractionQueue
+DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);//
 #endif
 
 // Sets default values
@@ -50,6 +51,7 @@ void APagedWorld::Tick(float DeltaTime)
 #ifdef WORLD_TICK_TRACKING
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
 #endif
+	VolumeMutex.Lock();
 		// pop render queue
 		// queue is multi input single consumer
 		while (!worldGenerationQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount, but causes slower loading times
@@ -109,20 +111,35 @@ void APagedWorld::Tick(float DeltaTime)
 	}
 #ifdef WORLD_TICK_TRACKING
 	}
-
+	
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
 #endif
+	VolumeMutex.Unlock();
 	auto dirtyClone = dirtyRegions;
 	dirtyRegions.Reset(); // leave slack
 	// do region updates
 	for (auto& region : dirtyClone) { // if we render unloaded regions we get cascading world gen
-		if (regions.Contains(region)) {
-			auto reg = getRegionAt(region);
-			reg->SlowRender();
-			reg->UpdateNavigation();
-		}
-		//if (regions.Contains(region)) QueueRegionRender(region);
+		//if (regions.Contains(region)) {
+		//	auto reg = getRegionAt(region);
+		//	reg->SlowRender();
+		//	reg->UpdateNavigation();
+		//}
+		if (regions.Contains(region)) QueueRegionRender(region);
 	}
+
+#ifdef WORLD_TICK_TRACKING
+}
+
+	{ SCOPE_CYCLE_COUNTER(STAT_WorldClearExtractionQueue);
+#endif
+	while (!extractionQueue.IsEmpty()) {
+		FExtractionTaskOutput gen;
+		extractionQueue.Dequeue(gen);
+		auto reg = getRegionAt(gen.region);
+		reg->RenderParsed(gen);
+		reg->UpdateNavigation();
+	}
+
 #ifdef WORLD_TICK_TRACKING
 	}
 #endif
@@ -166,10 +183,10 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 	}
 }
 
-// void APagedWorld::QueueRegionRender(FIntVector pos)
-//{
-//	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
-//}
+ void APagedWorld::QueueRegionRender(FIntVector pos)
+{
+	 (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask();
+}
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 	dirtyRegions.Emplace(pos);
