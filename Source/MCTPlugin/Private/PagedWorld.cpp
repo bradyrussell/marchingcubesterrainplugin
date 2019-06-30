@@ -3,6 +3,12 @@
 #include "PagedRegion.h"
 #include "TerrainPagingComponent.h"
 
+#ifdef WORLD_TICK_TRACKING
+DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
+#endif
+
 // Sets default values
 APagedWorld::APagedWorld()
 {
@@ -14,7 +20,9 @@ APagedWorld::APagedWorld()
 APagedWorld::~APagedWorld()
 {
 	VoxelVolume.Reset();
+	UE_LOG(LogTemp, Warning, TEXT("Saving world database..."));
 	delete worldDB;
+	UE_LOG(LogTemp, Warning, TEXT("World database saved."));
 }
 
 // Called when the game starts or when spawned
@@ -39,27 +47,33 @@ void APagedWorld::BeginPlay()
 void APagedWorld::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	// pop render queue
-	// queue is multi input single consumer
-	if (!worldGenerationQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount, but also may cause more redraws due to dirty regions
+#ifdef WORLD_TICK_TRACKING
+	{ SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
+#endif
+		// pop render queue
+		// queue is multi input single consumer
+		while (!worldGenerationQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount, but causes slower loading times
 
-		FWorldGenerationTaskOutput gen;
-		worldGenerationQueue.Dequeue(gen);
-		remainingRegionsToGenerate--;
+			FWorldGenerationTaskOutput gen;
+			worldGenerationQueue.Dequeue(gen);
+			remainingRegionsToGenerate--;
 
-		for (int32 x = 0; x < REGION_SIZE; x++) { 
-			for (int32 y = 0; y < REGION_SIZE; y++) {
-				for (int32 z = 0; z < REGION_SIZE; z++) {
-					VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
+			for (int32 x = 0; x < REGION_SIZE; x++) {
+				for (int32 y = 0; y < REGION_SIZE; y++) {
+					for (int32 z = 0; z < REGION_SIZE; z++) {
+						VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
+					}
 				}
 			}
-		}
 
-		//dirtyRegions.Emplace(gen.pos);
-		//MarkRegionDirtyAndAdjacent(gen.pos);
+			//dirtyRegions.Emplace(gen.pos);
+			//MarkRegionDirtyAndAdjacent(gen.pos);
+		}
+#ifdef WORLD_TICK_TRACKING
 	}
 
-
+	{ SCOPE_CYCLE_COUNTER(STAT_WorldVoxelUpdates);
+#endif
 	// also voxelmodify queue
 	while (!voxelUpdateQueue.IsEmpty()) {
 
@@ -69,7 +83,7 @@ void APagedWorld::Tick(float DeltaTime)
 		try {
 			//lock
 			for (int32 x = 0; x < update.radius; x++) { // todo evaluate performance
-				for (int32 y = 0; y < update.radius; y++) {  
+				for (int32 y = 0; y < update.radius; y++) {
 					for (int32 z = 0; z < update.radius; z++) {
 
 						int32 n = update.radius / 2;
@@ -79,11 +93,11 @@ void APagedWorld::Tick(float DeltaTime)
 
 						//if (!update.bIsSpherical || FVector::DistSquared(FVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz), FVector(update.origin)) <= update.radius*update.radius) { // not the optimal sphere algo 
 
-							VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
-							MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
-							//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz))); //proper
-							//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + (2*nx), update.origin.Y + (2*ny), update.origin.Z + (2*nz)))); //hack
-						//}
+						VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
+						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
+						//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz))); //proper
+						//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + (2*nx), update.origin.Y + (2*ny), update.origin.Z + (2*nz)))); //hack
+					//}
 					}
 				}
 			}
@@ -93,11 +107,15 @@ void APagedWorld::Tick(float DeltaTime)
 			continue;
 		}
 	}
+#ifdef WORLD_TICK_TRACKING
+	}
 
+	{ SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
+#endif
 	auto dirtyClone = dirtyRegions;
 	dirtyRegions.Reset(); // leave slack
 	// do region updates
-	for (auto& region : dirtyClone){ // if we render unloaded regions we get cascading world gen
+	for (auto& region : dirtyClone) { // if we render unloaded regions we get cascading world gen
 		if (regions.Contains(region)) {
 			auto reg = getRegionAt(region);
 			reg->SlowRender();
@@ -105,7 +123,9 @@ void APagedWorld::Tick(float DeltaTime)
 		}
 		//if (regions.Contains(region)) QueueRegionRender(region);
 	}
-
+#ifdef WORLD_TICK_TRACKING
+	}
+#endif
 }
 
 void APagedWorld::PostInitializeComponents() {
@@ -352,35 +372,37 @@ void WorldPager::pageOut(const PolyVox::Region & region, PolyVox::PagedVolume<Po
 }
 
 
-std::string SerializeLocationString(int32_t X, int32_t Y, int32_t Z, char W) {
-	char byteBuf[13];
-	uint32_t uX = X;
-	uint32_t uY = Y;
-	uint32_t uZ = Z;
-
-	byteBuf[0] = uX;
-	byteBuf[1] = uX >> 8;
-	byteBuf[2] = uX >> 16;
-	byteBuf[3] = uX >> 24;
-
-	byteBuf[4] = uY;
-	byteBuf[5] = uY >> 8;
-	byteBuf[6] = uY >> 16;
-	byteBuf[7] = uY >> 24;
-
-	byteBuf[8] = uZ;
-	byteBuf[9] = uZ >> 8;
-	byteBuf[10] = uZ >> 16;
-	byteBuf[11] = uZ >> 24;
-
-	byteBuf[12] = W;
-	return std::string(byteBuf, 13);
-}
+//std::string LegacySerializeLocationString(int32_t X, int32_t Y, int32_t Z, char W) {
+//	char byteBuf[13];
+//	uint32_t uX = X;
+//	uint32_t uY = Y;
+//	uint32_t uZ = Z;
+//
+//	byteBuf[0] = uX;
+//	byteBuf[1] = uX >> 8;
+//	byteBuf[2] = uX >> 16;
+//	byteBuf[3] = uX >> 24;
+//
+//	byteBuf[4] = uY;
+//	byteBuf[5] = uY >> 8;
+//	byteBuf[6] = uY >> 16;
+//	byteBuf[7] = uY >> 24;
+//
+//	byteBuf[8] = uZ;
+//	byteBuf[9] = uZ >> 8;
+//	byteBuf[10] = uZ >> 16;
+//	byteBuf[11] = uZ >> 24;
+//
+//	byteBuf[12] = W;
+//	return std::string(byteBuf, 13);
+//}
 
 std::string ArchiveToString(TArray<uint8> & archive)
 {
 	return std::string((char*)archive.GetData(), archive.Num());
 }
+
+
 
 void ArchiveFromString(std::string input, TArray<uint8> & archive)
 {
@@ -396,6 +418,15 @@ void ArchiveFromString(std::string input, TArray<uint8> & archive)
 	//FGenericPlatformMemory::Memcpy((void*)input.c_str(),archive.GetData(), len);
 }
 
+std::string SerializeLocationString(int32_t X, int32_t Y, int32_t Z, uint8 W) {
+	FBufferArchive tempBuffer(true);
+	tempBuffer << X;
+	tempBuffer << Y;
+	tempBuffer << Z;
+	tempBuffer << W;
+
+	return ArchiveToString(tempBuffer);
+}
 
 void APagedWorld::SaveChunkToDatabase(leveldb::DB * db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk)
 { // todo make batched write
@@ -482,6 +513,31 @@ bool APagedWorld::LoadGlobalDataFromDatabase(leveldb::DB * db, std::string key, 
  
 	ArchiveFromString(data, archive);
 	return true;
+}
+
+ void APagedWorld::SaveStringToGlobal(FString s)
+{
+	 FBufferArchive a;
+
+	 a << s;
+
+	SaveGlobalDataToDatabase(worldDB,"globalstring", a);
+}
+
+FString APagedWorld::LoadStringFromGlobal()
+{
+	TArray<uint8> a;
+	
+	if (!LoadGlobalDataFromDatabase(worldDB, "globalstring", a)) return "no such string";
+
+	FMemoryReader reader(a);
+
+	FString out;
+	reader << out;
+	reader.FlushCache();
+	reader.Close();
+
+	return out;
 }
 
 

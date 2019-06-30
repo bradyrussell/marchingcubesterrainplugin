@@ -100,11 +100,17 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 
 		//auto _temperature = noise[2]->GetNoise2D(x, y);
 		//auto _moisture = noise[3]->GetNoise2D(x, y);
 		auto _caves = noise[4]->GetNoise3D(x, y, z);
+
 		auto _moisture = 1;
 
-		if (z < _height - 24 && _caves > .5) { // caves 24m+ deep
-			Voxel.setMaterial(MATERIAL_AIR);
+		if (z < (_height - 24) && _caves > .6) { // caves 24m+ deep
+			Voxel.setMaterial(MATERIAL_AIR); // old cave
 			Voxel.setDensity(0);
+			return Voxel;
+		}
+		if (z < (_height - 24) && _caves > .5) { // cave walls?
+			Voxel.setMaterial(MATERIAL_ORE); 
+			Voxel.setDensity(140);
 			return Voxel;
 		}
 

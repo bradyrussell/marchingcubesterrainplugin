@@ -11,6 +11,7 @@
 #include "RuntimeMeshComponent.h"
 #include "LevelDatabase.h"
 #include "BufferArchive.h"
+#include "MemoryReader.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WorldGenInterpreters.h"
@@ -21,18 +22,20 @@
 #define VOXEL_SIZE 100 // cm
 #define MAX_MATERIALS 4
 #define MARCHING_CUBES 1
-#define ASYNC_COLLISION false//!WITH_EDITOR//false
+#define ASYNC_COLLISION true//!WITH_EDITOR//false
 //#define REGION_UNLOAD_DELAY 10 //seconds
+
+#define WORLD_TICK_TRACKING
 
 // db config
 #define DB_NAME "WorldDatabase"
-#define DB_GLOBAL_TAG "MapGlobalData_" // 14 bytes or more so we dont conflict with region keys
+#define DB_GLOBAL_TAG "MapGlobalData_" // 14 bytes or more so we dont conflict with region keys. // because region data can encompass all 13 byte strings, we will always interrupt ordering somehow
 
 // regional data offsets, max of 255 - REGION_SIZE 
-#define REGIONAL_DATA_RESERVED 0
-#define REGIONAL_DATA_ENTITY 1
-#define REGIONAL_DATA_CONTAINER 2
-#define REGIONAL_DATA_RESOURCES 3
+#define REGIONAL_DATA_RESERVED 0 // use for local conditions like weather, air quality etc?
+#define REGIONAL_DATA_ENTITY 1 // store an array of actor archives with spawn information
+#define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
+#define REGIONAL_DATA_RESOURCES 3 // store dropped items
 
 #define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
 
@@ -90,6 +93,9 @@ struct FWorldGenerationTaskOutput //
 	PolyVox::MaterialDensityPair88 voxel[REGION_SIZE][REGION_SIZE][REGION_SIZE];
 };
 
+#ifdef WORLD_TICK_TRACKING
+DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
+#endif
 
 UCLASS()
 class MCTPLUGIN_API APagedWorld : public AActor
@@ -157,10 +163,12 @@ public:
 	void SaveGlobalDataToDatabase(leveldb::DB * db, std::string key, TArray<uint8> &archive);
 	bool LoadGlobalDataFromDatabase(leveldb::DB * db, std::string key, TArray<uint8> &archive);
 
+	UFUNCTION(BlueprintCallable) void SaveStringToGlobal(FString s);
+	UFUNCTION(BlueprintCallable) FString LoadStringFromGlobal();
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
 	// todo make queue
-	TSet<FIntVector> dirtyRegions; // region keys which need redrawn; either because their voxels were modified or because they were just created
+	TSet<FIntVector> dirtyRegions; // region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
 	//TQueue<FIntVector, EQueueMode::Mpsc> dirtyRegions;
@@ -252,6 +260,8 @@ namespace WorldGenThread {
 					}
 				}
 			}
+
+			// i can do multiple stages of generation here
 
 			world->worldGenerationQueue.Enqueue(output);
 		}
