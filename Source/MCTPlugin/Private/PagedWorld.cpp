@@ -6,8 +6,8 @@
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
 DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
-DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);//WorldClearExtractionQueue
-DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);//
+DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
 #endif
 
 // Sets default values
@@ -48,17 +48,21 @@ void APagedWorld::BeginPlay()
 void APagedWorld::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-#ifdef WORLD_TICK_TRACKING
+
+	#ifdef WORLD_TICK_TRACKING
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
-#endif
-	VolumeMutex.Lock();
+	#endif
+
+		int NewRegions = 0;
+
+		VolumeMutex.Lock();
 		// pop render queue
 		// queue is multi input single consumer
-		while (!worldGenerationQueue.IsEmpty()) { // doing one per tick reduces hitches by a good amount, but causes slower loading times
+		while (!worldGenerationQueue.IsEmpty()) { // doing x per tick reduces hitches by a good amount, but causes slower loading times
 
 			FWorldGenerationTaskOutput gen;
 			worldGenerationQueue.Dequeue(gen);
-			remainingRegionsToGenerate--;
+			
 
 			for (int32 x = 0; x < REGION_SIZE; x++) {
 				for (int32 y = 0; y < REGION_SIZE; y++) {
@@ -67,82 +71,70 @@ void APagedWorld::Tick(float DeltaTime)
 					}
 				}
 			}
+			remainingRegionsToGenerate--;
 
-			//dirtyRegions.Emplace(gen.pos);
-			//MarkRegionDirtyAndAdjacent(gen.pos);
 		}
-#ifdef WORLD_TICK_TRACKING
+	#ifdef WORLD_TICK_TRACKING
 	}
-
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldVoxelUpdates);
-#endif
-	// also voxelmodify queue
-	while (!voxelUpdateQueue.IsEmpty()) {
+	#endif
+		// also voxelmodify queue
+		while (!voxelUpdateQueue.IsEmpty()) {
 
-		FVoxelUpdate update;
-		voxelUpdateQueue.Dequeue(update);
+			FVoxelUpdate update;
+			voxelUpdateQueue.Dequeue(update);
 
-		try {
-			//lock
-			for (int32 x = 0; x < update.radius; x++) { // todo evaluate performance
-				for (int32 y = 0; y < update.radius; y++) {
-					for (int32 z = 0; z < update.radius; z++) {
+			try {
+				//lock
+				for (int32 x = 0; x < update.radius; x++) { // todo evaluate performance
+					for (int32 y = 0; y < update.radius; y++) {
+						for (int32 z = 0; z < update.radius; z++) {
 
-						int32 n = update.radius / 2;
-						int32 nx = x - n;
-						int32 ny = y - n;
-						int32 nz = z - n;
+							int32 n = update.radius / 2;
+							int32 nx = x - n;
+							int32 ny = y - n;
+							int32 nz = z - n;
 
-						//if (!update.bIsSpherical || FVector::DistSquared(FVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz), FVector(update.origin)) <= update.radius*update.radius) { // not the optimal sphere algo 
 
-						VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
-						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
-						//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz))); //proper
-						//dirtyRegions.Emplace(VoxelToRegionCoords(FIntVector(update.origin.X + (2*nx), update.origin.Y + (2*ny), update.origin.Z + (2*nz)))); //hack
-					//}
+							VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
+							MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
+
+						}
 					}
 				}
 			}
+			catch (...) {
+				UE_LOG(LogTemp, Warning, TEXT("Caught exception in voxelUpdateQueue processing."));
+				continue;
+			}
 		}
-		catch (...) {
-			UE_LOG(LogTemp, Warning, TEXT("Caught exception in voxelUpdateQueue processing."));
-			continue;
-		}
+	#ifdef WORLD_TICK_TRACKING
 	}
-#ifdef WORLD_TICK_TRACKING
-	}
-	
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
-#endif
-	VolumeMutex.Unlock();
-	auto dirtyClone = dirtyRegions;
-	dirtyRegions.Reset(); // leave slack
-	// do region updates
-	for (auto& region : dirtyClone) { // if we render unloaded regions we get cascading world gen
-		//if (regions.Contains(region)) {
-		//	auto reg = getRegionAt(region);
-		//	reg->SlowRender();
-		//	reg->UpdateNavigation();
-		//}
-		if (regions.Contains(region)) QueueRegionRender(region);
+	#endif
+		VolumeMutex.Unlock();
+
+		auto dirtyClone = dirtyRegions;
+		dirtyRegions.Reset(); // leave slack
+		for (auto& region : dirtyClone) { // if we render unloaded regions we get cascading world gen
+			if (regions.Contains(region)) QueueRegionRender(region);
+		}
+
+	#ifdef WORLD_TICK_TRACKING
 	}
-
-#ifdef WORLD_TICK_TRACKING
-}
-
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldClearExtractionQueue);
-#endif
-	while (!extractionQueue.IsEmpty()) {
-		FExtractionTaskOutput gen;
-		extractionQueue.Dequeue(gen);
-		auto reg = getRegionAt(gen.region);
-		reg->RenderParsed(gen);
-		reg->UpdateNavigation();
-	}
+	#endif
+		while (!extractionQueue.IsEmpty()) {
+			FExtractionTaskOutput gen;
+			extractionQueue.Dequeue(gen);
+			auto reg = getRegionAt(gen.region);
+			reg->RenderParsed(gen);
+			reg->UpdateNavigation();
+		}
 
-#ifdef WORLD_TICK_TRACKING
+	#ifdef WORLD_TICK_TRACKING
 	}
-#endif
+	#endif
 }
 
 void APagedWorld::PostInitializeComponents() {
@@ -166,7 +158,7 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 	//FActorSpawnParameters param;
 	FVector fpos = FVector(pos);
 
-	UE_LOG(LogTemp, Warning, TEXT("Spawning a new region actor at %s."), *pos.ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Spawning a new region actor at %s."), *pos.ToString());
 
 
 	try {
@@ -178,7 +170,7 @@ APagedRegion * APagedWorld::getRegionAt(FIntVector pos)
 		return region;
 	}
 	catch (...) {
-		UE_LOG(LogTemp, Warning, TEXT("Exception spawning a new region actor at %s."), *pos.ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("Exception spawning a new region actor at %s."), *pos.ToString());
 		return nullptr;
 	}
 }
@@ -200,35 +192,6 @@ void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 	dirtyRegions.Emplace(pos + FIntVector(0, 0, -REGION_SIZE));
 }
 
-
-void APagedWorld::GenerateWorldRadius(FIntVector pos, int32 radius)
-{
-	//for (int z = -radius; z <= radius; z++) { // top down makes it feel faster
-	//	for (int y = -radius; y <= radius; y++) {
-	//		for (int x = -radius; x <= radius; x++) {
-	//			FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE*z); // -z means we gen higher regions first?
-	//			if (regionsOnDisk.Contains(surrounding)) {
-	//				getRegionAt(pos); // spawn actor
-	//				MarkRegionDirtyAndAdjacent(pos);
-	//			} else if (!regions.Contains(surrounding)) beginWorldGeneration(surrounding);
-	//		}
-	//	}
-	//}
-}
-
-void APagedWorld::TouchOrSpawnRadius(FIntVector pos, int32 radius)
-{
-	for (int z = -radius; z <= radius; z++) { // top down makes it feel faster
-		for (int y = -radius; y <= radius; y++) {
-			for (int x = -radius; x <= radius; x++) {
-				FIntVector surrounding = pos + FIntVector(REGION_SIZE*x, REGION_SIZE*y, -REGION_SIZE*z); // -z means we gen higher regions first?
-
-				getRegionAt(surrounding)->Touch(); // spawns if doesnt exist
-
-			}
-		}
-	}
-}
 
 void APagedWorld::LoadOrGenerateWorldRadius(FIntVector pos, int32 radius)
 {
@@ -267,7 +230,7 @@ FIntVector APagedWorld::WorldToVoxelCoords(FVector world)
 
 void APagedWorld::beginWorldGeneration(FIntVector pos)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Beginning world generation for region at %s."), *pos.ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Beginning world generation for region at %s."), *pos.ToString());
 
 	//getRegionAt(pos); // create the actor
 	remainingRegionsToGenerate++;
@@ -282,21 +245,6 @@ int32 APagedWorld::getVolumeMemoryBytes()
 void APagedWorld::Flush()
 {
 	VoxelVolume.Get()->flushAll();
-}
-
-void APagedWorld::UnloadOldRegions()
-{
-	TArray<FIntVector> oldKeys;
-
-	for (auto& Elem : regions){ // get all stale regions
-		if (!Elem.Value->wasSeenWithin(FTimespan::FromSeconds(29))) {
-			oldKeys.Add(Elem.Key);
-		}
-	}
-
-	for (auto& Elem : oldKeys) { // remove them from map and destroy them
-		regions.FindAndRemoveChecked(Elem)->SetLifeSpan(.1);
-	}
 }
 
 void APagedWorld::PagingComponentTick()

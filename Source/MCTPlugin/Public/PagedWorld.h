@@ -23,9 +23,9 @@
 #define MAX_MATERIALS 4
 #define MARCHING_CUBES 1
 #define ASYNC_COLLISION true//!WITH_EDITOR//false
+//#define NEW_REGIONS_PER_TICK 5
 
-
-#define WORLD_TICK_TRACKING
+//#define WORLD_TICK_TRACKING
 
 // db config
 #define DB_NAME "WorldDatabase"
@@ -137,15 +137,11 @@ public:
 	// world gen
 	UFUNCTION(BlueprintImplementableEvent) TArray<UUFNNoiseGenerator*>  GetNoiseGeneratorArray();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void beginWorldGeneration(FIntVector pos);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) void GenerateWorldRadius(FIntVector pos, int32 radius);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) void TouchOrSpawnRadius(FIntVector pos, int32 radius);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void LoadOrGenerateWorldRadius(FIntVector pos, int32 radius);
 
 	// memory
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes();
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) void Flush();
-
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadOldRegions();
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void PagingComponentTick();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
@@ -175,8 +171,6 @@ public:
 
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
-
-	//TSet<FIntVector> regionsOnDisk;
 
 	leveldb::DB *worldDB;
 };
@@ -276,7 +270,7 @@ namespace ExtractionThread {
 		APagedWorld* world;
 		FIntVector lower;
 	public:
-		ExtractionTask(APagedWorld* world, FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/) {
+		ExtractionTask(APagedWorld* world, FIntVector lower) {
 			this->world = world;
 			this->lower = lower;
 		}
