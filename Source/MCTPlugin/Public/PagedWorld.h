@@ -20,7 +20,7 @@
 // voxel config
 #define REGION_SIZE 32 //voxels
 #define VOXEL_SIZE 100 // cm
-#define MAX_MATERIALS 4
+#define MAX_MATERIALS 6
 #define MARCHING_CUBES 1
 #define ASYNC_COLLISION true//!WITH_EDITOR//false
 //#define NEW_REGIONS_PER_TICK 5
@@ -145,7 +145,7 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 
 	// terrain modification
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, AActor* cause = nullptr, bool bIsSpherical = false);
 
 	// coordinates
 	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector voxel);
@@ -153,7 +153,7 @@ public:
 	WorldToVoxelCoords(FVector world);
 
 	// world gen
-	UFUNCTION(BlueprintImplementableEvent) TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray();
+	UFUNCTION(BlueprintImplementableEvent) const TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray(); // can this be const?
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void beginWorldGeneration(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void PrefetchRegionsInRadius(FIntVector pos, int32 radius) const;
 

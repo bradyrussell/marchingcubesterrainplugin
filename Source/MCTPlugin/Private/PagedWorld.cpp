@@ -49,7 +49,6 @@ void APagedWorld::BeginPlay() {
 	UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %d"), *dbname, b);
 
 	TArray<uint8> versionArchive;
-
 	if(LoadGlobalDataFromDatabase(worldDB, DB_VERSION_TAG, versionArchive)) {
 		FMemoryReader versionReader(versionArchive);
 		int32 db_version;
@@ -217,8 +216,8 @@ void APagedWorld::PrefetchRegionsInRadius(FIntVector pos, int32 radius) const {
 	VoxelVolume.Get()->prefetch(reg);
 }
 
-bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, bool bIsSpherical) {
-	voxelUpdateQueue.Enqueue(FVoxelUpdate(pos,r,m,d,nullptr,bIsSpherical));
+bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, AActor* cause, bool bIsSpherical) {
+	voxelUpdateQueue.Enqueue(FVoxelUpdate(pos,r,m,d,cause,bIsSpherical));
 	return true;
 }
 

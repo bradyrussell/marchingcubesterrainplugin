@@ -82,9 +82,6 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height, float _caves, float _ore) {
 	PolyVox::MaterialDensityPair88 Voxel;
 
-	if (_ore > .9) {
-		return PolyVox::MaterialDensityPair88(MATERIAL_ORE, 140);
-	}
 
 	if (z < (_height + 4) && (_caves > 1)) {
 		return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
@@ -96,15 +93,27 @@ PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height,
 	if (z + 8 > _height) {
 		return PolyVox::MaterialDensityPair88(MATERIAL_DIRT, 255);
 	}
-	else if (z + 560 > _height) {
+
+	if(_ore > .7) {
+		float randomness = (_ore - .7)*100; // blends veins near borders
+
+		if(_height - 1024+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_URANIUM, 200+randomness);
+		if(_height - 256+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_GOLD, 200+randomness);
+		if(_height - 128+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_IRON, 200+randomness);
+		if(_height - 1+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_COAL, 200+randomness);
+		
+	}
+
+	if (z + 560 > _height) {
 		return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
 	}
-	else if (z + 880 > _height) {
+
+	if (z + 880 > _height) {
 		return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
 	}
-	else {
-		return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
-	}
+
+	return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
+	
 }
 
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
