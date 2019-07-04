@@ -6,8 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 
 // Sets default values for this component's properties
-UTerrainPagingComponent::UTerrainPagingComponent()
-{
+UTerrainPagingComponent::UTerrainPagingComponent() {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = false;
@@ -18,8 +17,7 @@ UTerrainPagingComponent::UTerrainPagingComponent()
 
 
 // Called when the game starts
-void UTerrainPagingComponent::BeginPlay()
-{
+void UTerrainPagingComponent::BeginPlay() {
 	Super::BeginPlay();
 	TArray<AActor*> worldActors;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), APagedWorld::StaticClass(), worldActors);
@@ -33,17 +31,15 @@ void UTerrainPagingComponent::BeginPlay()
 
 	world->RegisterPagingComponent(this);
 	// ...
-	
+
 }
 
 
 // Called every frame
-void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
+void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	//world->LoadOrGenerateWorldRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())), viewDistance);
+	//world->PrefetchRegionsInRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())), viewDistance);
 	//world->TouchOrSpawnRadius(world->VoxelToRegionCoords(world->WorldToVoxelCoords(GetOwner()->GetActorLocation())),viewDistance);
 	// ...
 }
-

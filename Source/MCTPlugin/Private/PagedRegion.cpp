@@ -4,8 +4,7 @@
 #include "PolyVox/Mesh.h"
 
 // Sets default values
-APagedRegion::APagedRegion()
-{
+APagedRegion::APagedRegion() {
 	PrimaryActorTick.bCanEverTick = false;
 	Scene = CreateDefaultSubobject<USceneComponent>(FName(TEXT("Root")));
 	SetRootComponent(Scene);
@@ -13,8 +12,7 @@ APagedRegion::APagedRegion()
 }
 
 // Called every frame
-void APagedRegion::Tick(float DeltaTime)
-{
+void APagedRegion::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
 
 	//if (!extractionResultQueue.IsEmpty()) { 
@@ -49,38 +47,30 @@ void APagedRegion::Tick(float DeltaTime)
 	//}
 }
 
-APagedRegion::~APagedRegion()
-{
+APagedRegion::~APagedRegion() {
 	//VoxelVolume.Reset();
 }
 
 
-void APagedRegion::PostInitializeComponents()
-{
-	Super::PostInitializeComponents();
-}
- 
+void APagedRegion::PostInitializeComponents() { Super::PostInitializeComponents(); }
+
 // Called when the actor has begun playing in the level
-void APagedRegion::BeginPlay()
-{
+void APagedRegion::BeginPlay() {
 	Super::BeginPlay();
-	rMesh = NewObject<URuntimeMeshComponent>(this, URuntimeMeshComponent::StaticClass());//, *compName);
+	rMesh = NewObject<URuntimeMeshComponent>(this, URuntimeMeshComponent::StaticClass()); //, *compName);
 	rMesh->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepWorldTransform);
 	rMesh->BodyInstance.SetResponseToAllChannels(ECR_Block);
-	
+
 	/// DISABLING THIS STOPS THE NAN ERROR. 
 
-	#if ASYNC_COLLISION == true 
+#if ASYNC_COLLISION == true
 	rMesh->SetCollisionUseAsyncCooking(true); // this gave more performance gains than all the render queues as far as i can tell
-	#endif
+#endif
 
 
 	rMesh->RegisterComponent();
 	//Touch();
 }
-
-
-
 
 
 //void APagedRegion::SlowRender()
@@ -250,22 +240,23 @@ void APagedRegion::BeginPlay()
 //}
 
 
-void APagedRegion::RenderParsed(FExtractionTaskOutput output)
-{
-		// run below on gamethread
-	for (int32 Material = 0; Material < output.section.Num(); Material++){
-
-		if (output.section[Material].Indices.Num() > 0) { // fixes dhd3d resource crash 
+void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
+	// run below on gamethread
+	for (int32 Material = 0; Material < output.section.Num(); Material++) {
+		if (output.section[Material].Indices.Num() > 0) {
+			// fixes dhd3d resource crash 
 
 			FRuntimeMeshDataPtr Data = rMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
 			Data->EnterSerializedMode();
 
 			if (!wasCreated[Material]) {
-				Data->CreateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0, output.section[Material].Colors, output.section[Material].Tangents, true, EUpdateFrequency::Frequent /*EUpdateFrequency::Average*/);
+				Data->CreateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
+				                        output.section[Material].Colors, output.section[Material].Tangents, true, EUpdateFrequency::Frequent /*EUpdateFrequency::Average*/);
 				wasCreated[Material] = true;
 			}
 			else {
-				Data->UpdateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0, output.section[Material].Colors, output.section[Material].Tangents);
+				Data->UpdateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
+				                        output.section[Material].Colors, output.section[Material].Tangents);
 			}
 
 			auto Section = Data->BeginSectionUpdate(Material); // must be called every update
@@ -280,7 +271,4 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output)
 	return;
 }
 
-void APagedRegion::UpdateNavigation()
-{
-	FNavigationSystem::UpdateComponentData(*rMesh);
-}
+void APagedRegion::UpdateNavigation() { FNavigationSystem::UpdateComponentData(*rMesh); }

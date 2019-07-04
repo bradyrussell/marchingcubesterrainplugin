@@ -1,18 +1,17 @@
 #include "WorldGenInterpreters.h"
 #include "PagedWorld.h"
 
-PolyVox::MaterialDensityPair88 WorldGen::Interpret_Woods(int32 x, int32 y, int32 z, UUFNNoiseGenerator * material, UUFNNoiseGenerator * heightmap, UUFNNoiseGenerator * biome)
-{
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Woods(int32 x, int32 y, int32 z, UUFNNoiseGenerator* material, UUFNNoiseGenerator* heightmap, UUFNNoiseGenerator* biome) {
 	PolyVox::MaterialDensityPair88 Voxel;
 	auto _height = heightmap->GetNoise2D(x, y);
 	auto _material = material->GetNoise3D(x, y, z);
 	auto _biome = biome->GetNoise3D(x, y, z);
 
-	if (z <= 0+(_biome)) {
+	if (z <= 0 + (_biome)) {
 		Voxel.setMaterial(1);
 		Voxel.setDensity(Voxel.getMaxDensity());
 	}
-	else if (z > _height*2) {
+	else if (z > _height * 2) {
 		Voxel.setMaterial(0);
 		Voxel.setDensity(0);
 	}
@@ -26,8 +25,7 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Woods(int32 x, int32 y, int32
 	return Voxel;
 }
 
-PolyVox::MaterialDensityPair88 WorldGen::Interpret_AlienSpires(int32 x, int32 y, int32 z, UUFNNoiseGenerator * material, UUFNNoiseGenerator * heightmap, UUFNNoiseGenerator * biome)
-{
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_AlienSpires(int32 x, int32 y, int32 z, UUFNNoiseGenerator* material, UUFNNoiseGenerator* heightmap, UUFNNoiseGenerator* biome) {
 	PolyVox::MaterialDensityPair88 Voxel;
 	auto _height = heightmap->GetNoise2D(x, y);
 	auto _material = material->GetNoise3D(x, y, z);
@@ -57,8 +55,7 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_AlienSpires(int32 x, int32 y,
 	return Voxel;
 }
 
-PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32 z, UUFNNoiseGenerator * material, UUFNNoiseGenerator * heightmap, UUFNNoiseGenerator * biome)
-{
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32 z, UUFNNoiseGenerator* material, UUFNNoiseGenerator* heightmap, UUFNNoiseGenerator* biome) {
 	PolyVox::MaterialDensityPair88 Voxel;
 	auto _height = heightmap->GetNoise2D(x, y);
 	auto _material = material->GetNoise3D(x, y, z);
@@ -82,53 +79,64 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 	return Voxel;
 }
 
-PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise)
-{
-	if (noise.Num() == 0) return PolyVox::MaterialDensityPair88();
-
+PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height, float _caves, float _ore) {
 	PolyVox::MaterialDensityPair88 Voxel;
-	auto _height = noise[0]->GetNoise2D(x, y);
-	//only evaluate noise when you will need it; its expensive
 
-	if (z > _height) { // Above maximum height
-		Voxel.setMaterial(MATERIAL_AIR);
-		Voxel.setDensity(0);
-		return Voxel;
+	if (_ore > .9) {
+		return PolyVox::MaterialDensityPair88(MATERIAL_ORE, 140);
+	}
+
+	if (z < (_height + 4) && (_caves > 1)) {
+		return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+	}
+	//if (z < (_height - 64) && _caves > .5) {
+	//	return PolyVox::MaterialDensityPair88(MATERIAL_ORE, 140);
+	//}
+
+	if (z + 8 > _height) {
+		return PolyVox::MaterialDensityPair88(MATERIAL_DIRT, 255);
+	}
+	else if (z + 560 > _height) {
+		return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
+	}
+	else if (z + 880 > _height) {
+		return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
 	}
 	else {
+		return PolyVox::MaterialDensityPair88(MATERIAL_STONE, 255);
+	}
+}
+
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
+	if (noise.Num() == 0) return PolyVox::MaterialDensityPair88();
+
+	auto _height = noise[0]->GetNoise2D(x, y);
+	//only evaluate noise when you will need it; its expensive. aka return as soon as possible
+
+	if (z > _height) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+
+	else {
 		//auto _material = noise[1]->GetNoise3D(x, y, z);
-		//auto _temperature = noise[2]->GetNoise2D(x, y);
-		//auto _moisture = noise[3]->GetNoise2D(x, y);
+
+		auto _temperature = noise[2]->GetNoise2D(x, y); // assumed to be -1 thru 1
+		//auto _moisture = noise[3]->GetNoise2D(x, y); // assumed to be -1 thru 1
+
+		auto _biome = Interpret_Biome(_height,_temperature,1);
+
 		auto _caves = noise[4]->GetNoise3D(x, y, z);
+		auto _ore = noise[5]->GetNoise3D(x, y, z);
 
-		auto _moisture = 1;
+		switch (_biome) { 
 
-		if (z < (_height - 24) && _caves > .6) { // caves 24m+ deep
-			Voxel.setMaterial(MATERIAL_AIR); // old cave
-			Voxel.setDensity(0);
-			return Voxel;
+			case MOUNTAINS: return Interpret_Biome_Mountains(z, _height, _caves, _ore);
+			default: return PolyVox::MaterialDensityPair88(0,0);
 		}
-		if (z < (_height - 24) && _caves > .5) { // cave walls?
-			Voxel.setMaterial(MATERIAL_ORE); 
-			Voxel.setDensity(140);
-			return Voxel;
-		}
-
-		if (z + 4 > _height) { // grass layer
-			Voxel.setMaterial(MATERIAL_DIRT);
-			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
-		} else if(z + 280 > _height) { //stone layer
-			Voxel.setMaterial(MATERIAL_STONE);
-			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
-		} else if (z + 400 > _height) { // gold layer
-			Voxel.setMaterial(MATERIAL_ORE);
-			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
-		} else { // bedrock
-			Voxel.setMaterial(MATERIAL_WOOD);
-			Voxel.setDensity(_moisture*Voxel.getMaxDensity());
-		}
-
 	}
 
-	return Voxel;
+}
+
+EBiome WorldGen::Interpret_Biome(float _height, float temperatue, float moisture) {
+	//if(_height > 64) return MOUNTAINS;
+	//if(_height > 0) return PLAINS;
+	return MOUNTAINS;
 }

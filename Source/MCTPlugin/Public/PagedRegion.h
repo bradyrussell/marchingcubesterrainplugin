@@ -21,11 +21,10 @@
 
 
 UCLASS()
-class MCTPLUGIN_API APagedRegion : public AActor
-{
+	class MCTPLUGIN_API APagedRegion : public AActor {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	APagedRegion();
 	~APagedRegion();
@@ -33,7 +32,7 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	virtual void PostInitializeComponents() override;
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
