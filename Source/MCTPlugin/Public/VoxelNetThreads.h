@@ -6,7 +6,6 @@
 #include "PlatformProcess.h"
 #include "ArrayReader.h"
 #include "Networking/Public/Interfaces/IPv4/IPv4Endpoint.h"
-#include "PagedWorld.h"
 #include "VoxelNetPackets.h"
 
 class APagedWorld;
@@ -73,13 +72,13 @@ namespace VoxelNetThreads {
 						}
 						else if (opcodeBuffer[0] == 0x1) {
 							// handshake
-							if (socket->Recv(opcodeBuffer.GetData() + 1, 5, BytesRead)) {
-								int32 cookie = 0;
+							if (socket->Recv(opcodeBuffer.GetData() + 1, 9, BytesRead)) {
+								int64 cookie = 0;
 								uint8 version = 0;
 								opcodeBuffer << version; // actually the opcode
 								opcodeBuffer << version;
 								opcodeBuffer << cookie;
-								UE_LOG(LogTemp, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %d"), version, cookie);
+								UE_LOG(LogTemp, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %llu"), version, cookie);
 							}
 						}
 						else if (opcodeBuffer[0] == 0x3) {
@@ -174,14 +173,14 @@ namespace VoxelNetThreads {
 		FSocket* socket;
 		FDateTime lastUpdate = FDateTime::Now();
 		const FIPv4Endpoint& endpoint;
-		APagedWorld* world;
-
+		//APagedWorld* world;
+		int64 cookie = 0;
 		bool running;
 
 		TQueue<TArray<TArray<uint8>>, EQueueMode::Mpsc> regionSetsToSend;
 
-		VoxelNetServer(APagedWorld* world, FSocket* socket, const FIPv4Endpoint& endpoint)
-			: socket(socket), endpoint(endpoint), world(world), running(true) {
+		VoxelNetServer(int64 cookie, FSocket* socket, const FIPv4Endpoint& endpoint)
+			: socket(socket), endpoint(endpoint), cookie(cookie), running(true) {
 		}
 
 		void UploadRegions(TArray<TArray<uint8>> regionPackets) { regionSetsToSend.Enqueue(regionPackets); }
@@ -211,7 +210,7 @@ namespace VoxelNetThreads {
 			int32 number = 0;
 
 			// handshake
-			int32 cookie = 0xfafafafa;
+			//int64 cookie = 110111011101110112;
 
 			FBufferArchive handshake(true);
 			Packet::MakeHandshake(handshake, cookie);
@@ -220,7 +219,7 @@ namespace VoxelNetThreads {
 			socket->Send(handshake.GetData(), handshake.Num(), sent);
 			Updated();
 
-			UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent handshake. %d bytes. Protocol version: %d, cookie: %d"), *endpoint.ToString(), sent, PROTOCOL_VERSION, cookie);
+			UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent handshake. %d bytes. Protocol version: %d, cookie: %llu"), *endpoint.ToString(), sent, PROTOCOL_VERSION, cookie);
 
 			// handshake accepted
 			while (running && lastUpdate + FTimespan::FromSeconds(SOCKET_TIMEOUT) >= FDateTime::Now()) {

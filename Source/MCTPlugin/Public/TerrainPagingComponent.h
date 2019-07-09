@@ -23,7 +23,7 @@ public:
 	APagedWorld* world;
 
 	//getCurrentRegion
-
+	TSet<FIntVector> subscribedRegions;
 
 protected:
 	// Called when the game starts

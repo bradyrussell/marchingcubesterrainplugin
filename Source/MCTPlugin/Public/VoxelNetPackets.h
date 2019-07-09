@@ -20,7 +20,7 @@ namespace Packet {
 		packet << nulbyte;
 	}
 
-	inline void MakeHandshake(FArchive &packet, int32 cookie) {
+	inline void MakeHandshake(FArchive &packet, int64 cookie) {
 		uint8 op = 0x01, ver = PROTOCOL_VERSION;
 		packet << op;
 		packet << ver;

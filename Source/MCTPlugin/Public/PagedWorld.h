@@ -11,46 +11,16 @@
 #include "RuntimeMeshComponent.h"
 #include "LevelDatabase.h"
 #include "BufferArchive.h"
-#include "MemoryReader.h"
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
 #include "WorldGenInterpreters.h"
 #include "VoxelNetThreads.h"
 #include "Networking/Public/Common/TcpListener.h"
+#include "Structs.h"
 #include "PagedWorld.generated.h"
 
 //todo set tcp listener to use my own socket, then set it to auto delete it, with send buffer of 16. 2mb is too small
 
-// voxel config
-#define REGION_SIZE 32 //voxels
-#define VOXEL_SIZE 100 // cm
-#define MAX_MATERIALS 6
-#define MARCHING_CUBES 1
-#define ASYNC_COLLISION true//!WITH_EDITOR//false
-//#define NEW_REGIONS_PER_TICK 5
 
-#define VOXELNET_SERVER 0 //WITH_SERVER_CODE
-#define VOXELNET_CLIENT 1 //1-WITH_SERVER_CODE
-#define VOXELNET_PORT 9292//9797
-
-//#define REGEN_NULL_REGIONS
-//#define DONT_SAVE
-//#define WORLD_TICK_TRACKING
-#define DATABASE_OPTIMIZATIONS
-
-// db config
-#define DB_NAME "WorldDatabase" // directory name of db
-#define DB_GLOBAL_TAG "MapGlobalData_" // 14 bytes or more so we dont conflict with region keys. // because region data can encompass all 13 byte strings, we will always interrupt ordering somehow
-#define DB_VERSION_TAG "DB_VERSION" //
-#define DB_VERSION 2 // changes when non backwards compatible changes to the structure occur
-
-// regional data offsets, max of 255 - REGION_SIZE 
-#define REGIONAL_DATA_RESERVED 0 // use for local conditions like weather, air quality etc?
-#define REGIONAL_DATA_ENTITY 1 // store an array of actor archives with spawn information
-#define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
-#define REGIONAL_DATA_RESOURCES 3 // store dropped items
-
-#define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
 
 //end config
 
@@ -60,73 +30,7 @@ class UTerrainPagingComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial);
 
-USTRUCT(BlueprintType)
-	struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
-{
-	GENERATED_BODY()
-	TArray<FVector> Vertices = TArray<FVector>();
-	TArray<FVector> Normals = TArray<FVector>();
-	TArray<FRuntimeMeshTangent> Tangents = TArray<FRuntimeMeshTangent>();
-	TArray<FColor> Colors = TArray<FColor>();
-	TArray<FVector2D> UV0 = TArray<FVector2D>();
-	TArray<int32> Indices = TArray<int32>();
-};
 
-USTRUCT(BlueprintType)
-	struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
-{
-	GENERATED_BODY()
-	FIntVector region;
-	TArray<FExtractionTaskSection> section = TArray<FExtractionTaskSection>();
-};
-
-USTRUCT(BlueprintType)
-	struct FPacketTaskOutput // compressed packet information for a region
-{
-	GENERATED_BODY()
-	FIntVector region;
-	TArray<uint8> packet;
-};
-
-USTRUCT(BlueprintType)
-	struct FVoxelUpdate // a change of a group of voxels from any type to a single new type
-{
-	GENERATED_BODY()
-	FVoxelUpdate() {
-	}
-
-	FVoxelUpdate(FIntVector Origin, uint8 Radius, uint8 Material, uint8 Density, AActor* causeActor = nullptr, bool IsSpherical = false, bool ShouldDrop = true, bool ShouldCallEvent = true)
-		: origin(Origin), radius(Radius), material(Material), density(Density), bShouldDrop(ShouldDrop), bIsSpherical(IsSpherical), bShouldCallEvent(ShouldCallEvent), causeActor(causeActor) {
-	}
-
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	FIntVector origin;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	uint8 radius;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	uint8 material;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	uint8 density;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	bool bShouldDrop;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	bool bIsSpherical;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	bool bShouldCallEvent;
-	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	AActor* causeActor = nullptr;
-};
-
-USTRUCT(BlueprintType)
-	struct FWorldGenerationTaskOutput // 
-{
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadWrite, Category = "WorldGen Task")
-	FIntVector pos;
-
-	PolyVox::MaterialDensityPair88 voxel[REGION_SIZE][REGION_SIZE][REGION_SIZE];
-};
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
@@ -184,6 +88,8 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void PagingComponentTick();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
 
+	UFUNCTION(Category = "VoxelNet", BlueprintCallable) void RegisterPlayerWithCookie(APlayerController* player, int64 cookie);
+
 	// save the actual voxel data to leveldb , stored under region coords X Y Z W where w 2kb is xy layers
 	void SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
 	bool ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
@@ -201,7 +107,7 @@ public:
 #if VOXELNET_SERVER
 		for (auto& elem : VoxelServers) {
 			TArray<TArray<uint8>> upload;
-			regionPackets.GenerateValueArray(upload);
+			regionPackets.GenerateValueArray(upload); // todo remove regionpackets when a region is despawned>
 			UE_LOG(LogTemp, Warning, TEXT("Uploading %d regions"), upload.Num());
 			elem.Get()->UploadRegions(upload);
 		}
@@ -222,8 +128,12 @@ public:
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 
+#if VOXELNET_SERVER
+
 	TMap<FIntVector, TArray<uint8>> regionPackets;
 	TQueue<FPacketTaskOutput, EQueueMode::Mpsc> packetQueue;
+
+#endif
 
 	leveldb::DB* worldDB;
 
@@ -239,7 +149,17 @@ public:
 	TArray<FRunnableThread*> ServerThreads;
 
 	// after handshake we associate playercontrollers with server threads, for uploading regions
+	TMap<int64, TSharedPtr<VoxelNetThreads::VoxelNetServer>> SentHandshakes;
 	TMap<APlayerController* ,TSharedPtr<VoxelNetThreads::VoxelNetServer>> PlayerVoxelServers;
+
+	//TQueue<FPendingHandshake, EQueueMode::Mpsc> pendingHandshakeQueue;
+
+	/*
+	 * Server sends handshake
+	 * Client receives and sends the cookie thru their playercontroller to the world Calling ServerRegisterPlayerWithCookie
+	 * RegisterPlayerWithCookie takes a calling playercontroller and a cookie, looks up the cookie in map and associates Player:Socket
+	 *
+	 */
 #endif
 
 #if VOXELNET_CLIENT
@@ -361,7 +281,7 @@ namespace ExtractionThread {
 			                                                 lower.Z + REGION_SIZE));
 
 			world->VolumeMutex.Lock();
-
+#if VOXELNET_SERVER
 			/*
 			 * We generate the packet in the extraction thread because: 
 			 *  that means it has just changed
@@ -394,7 +314,7 @@ namespace ExtractionThread {
 			packetOutput.packet = packetArchive;
 
 			world->packetQueue.Enqueue(packetOutput);
-
+#endif
 			// end packet generation
 
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
