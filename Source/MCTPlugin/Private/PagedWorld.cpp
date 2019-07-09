@@ -4,6 +4,9 @@
 #include "TerrainPagingComponent.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/cache.h"
+#include "Networking/Public/Common/TcpSocketBuilder.h"
+#include "Networking/Public/Interfaces/IPv4/IPv4Address.h"
+#include <PolyVox/MaterialDensityPair.h>
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -20,6 +23,24 @@ APagedWorld::APagedWorld() {
 }
 
 APagedWorld::~APagedWorld() {
+#if VOXELNET_CLIENT
+	if (ClientThread)
+		ClientThread->Kill(true);
+	VoxelClient.Reset();
+#endif
+
+#if VOXELNET_SERVER
+	for (auto& elem : ServerThreads) {
+		if (elem)
+			elem->Kill(true);
+	}
+	for (auto& elem : VoxelServers) { elem.Reset(); }
+	if (ServerListener.IsValid())
+		ServerListener.Get()->Stop();
+	ServerListener.Reset();
+#endif
+
+
 	VoxelVolume.Reset();
 	UE_LOG(LogTemp, Warning, TEXT("Saving world database..."));
 	delete worldDB;
@@ -49,7 +70,7 @@ void APagedWorld::BeginPlay() {
 	UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %d"), *dbname, b);
 
 	TArray<uint8> versionArchive;
-	if(LoadGlobalDataFromDatabase(worldDB, DB_VERSION_TAG, versionArchive)) {
+	if (LoadGlobalDataFromDatabase(worldDB, DB_VERSION_TAG, versionArchive)) {
 		FMemoryReader versionReader(versionArchive);
 		int32 db_version;
 		versionReader << db_version; // read version if one existed
@@ -57,7 +78,8 @@ void APagedWorld::BeginPlay() {
 		versionReader.Close();
 		UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Expected %d."), *dbname, db_version, DB_VERSION);
 		assert(db_version == DB_VERSION);
-	} else {
+	}
+	else {
 		FBufferArchive version;
 		int32 dbVersion = DB_VERSION;
 		version << dbVersion;
@@ -69,6 +91,12 @@ void APagedWorld::BeginPlay() {
 // Called every frame
 void APagedWorld::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
+
+	while (!packetQueue.IsEmpty()) {
+		FPacketTaskOutput output;
+		packetQueue.Dequeue(output);
+		regionPackets.Emplace(output.region, output.packet);
+	}
 
 #ifdef WORLD_TICK_TRACKING
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
@@ -87,10 +115,36 @@ void APagedWorld::Tick(float DeltaTime) {
 
 
 		for (int32 x = 0; x < REGION_SIZE; x++) {
-			for (int32 y = 0; y < REGION_SIZE; y++) { for (int32 z = 0; z < REGION_SIZE; z++) { VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]); } }
+			for (int32 y = 0; y < REGION_SIZE; y++) {
+				for (int32 z = 0; z < REGION_SIZE; z++) {
+					// 
+					VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
+				}
+			}
 		}
 		remainingRegionsToGenerate--;
 	}
+
+#if VOXELNET_CLIENT
+	if (VoxelClient.IsValid()) {
+		auto client = VoxelClient.Get();
+		while (!client->downloadedRegions.IsEmpty()) {
+			Packet::RegionData data;
+			client->downloadedRegions.Dequeue(data);
+
+			for (int x = 0; x < REGION_SIZE; x++) {
+				for (int y = 0; y < REGION_SIZE; y++) {
+					for (int z = 0; z < REGION_SIZE; z++) {
+						VoxelVolume->setVoxel(x+data.x,y+data.y,z+data.z, PolyVox::MaterialDensityPair88(data.data[0][x][y][z], data.data[1][x][y][z]));
+					}
+				}
+			}
+			auto pos = FIntVector(data.x,data.y,data.z);
+			getRegionAt(pos);
+			MarkRegionDirtyAndAdjacent(pos);
+		}
+	}
+#endif
 #ifdef WORLD_TICK_TRACKING
 	}
 	{ SCOPE_CYCLE_COUNTER(STAT_WorldVoxelUpdates);
@@ -116,10 +170,7 @@ void APagedWorld::Tick(float DeltaTime) {
 						VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
 						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
 
-						if(VoxelWorldUpdate_Event.IsBound()) {
-							VoxelWorldUpdate_Event.Broadcast(update.causeActor, update.origin, oldMaterial, update.material);
-						}
-
+						if (VoxelWorldUpdate_Event.IsBound()) { VoxelWorldUpdate_Event.Broadcast(update.causeActor, update.origin, oldMaterial, update.material); }
 					}
 				}
 			}
@@ -217,7 +268,7 @@ void APagedWorld::PrefetchRegionsInRadius(FIntVector pos, int32 radius) const {
 }
 
 bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, AActor* cause, bool bIsSpherical) {
-	voxelUpdateQueue.Enqueue(FVoxelUpdate(pos,r,m,d,cause,bIsSpherical));
+	voxelUpdateQueue.Enqueue(FVoxelUpdate(pos, r, m, d, cause, bIsSpherical));
 	return true;
 }
 
@@ -288,9 +339,7 @@ void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<Poly
 
 	bool regionExists = world->ReadChunkFromDatabase(world->worldDB, pos, pChunk);
 
-	if (!regionExists) {
-		world->beginWorldGeneration(pos);
-	}
+	if (!regionExists) { world->beginWorldGeneration(pos); }
 
 	return;
 }
@@ -357,7 +406,7 @@ void APagedWorld::SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::
 
 bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	bool containsNonZero = false;
-	
+
 	for (char w = 0; w < REGION_SIZE; w++) {
 		std::string chunkData;
 		auto status = db->Get(leveldb::ReadOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, w), &chunkData);
@@ -376,7 +425,8 @@ bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox
 				unsigned char den = chunkData[n++];
 
 				//auto voxel = PolyVox::MaterialDensityPair88(mat,den);
-				if(mat != 0) containsNonZero = true;
+				if (mat != 0)
+					containsNonZero = true;
 				pChunk->setVoxel(x, y, w, PolyVox::MaterialDensityPair88(mat, den));
 			}
 		}
@@ -386,7 +436,7 @@ bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox
 #else REGEN_NULL_REGIONS
 	return true;
 #endif
-	
+
 }
 
 void APagedWorld::SaveRegionalDataToDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive) {
@@ -441,6 +491,50 @@ FString APagedWorld::LoadStringFromGlobal() {
 	return out;
 }
 
+
+bool APagedWorld::StartServer() {
+#if VOXELNET_SERVER
+	const FIPv4Endpoint Endpoint(FIPv4Address::Any,VOXELNET_PORT);
+	ServerListener = MakeShareable(new FTcpListener(Endpoint));
+
+	auto listener = ServerListener.Get();
+
+	listener->OnConnectionAccepted().BindUObject(this, &APagedWorld::OnConnectionAccepted);
+
+	return listener->Init() && listener->OnConnectionAccepted().IsBound() && listener->IsActive();
+#endif
+	return false;
+}
+
+#if VOXELNET_SERVER
+bool APagedWorld::OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint) {
+	UE_LOG(LogTemp, Warning, TEXT("Connection received from %s, starting thread..."), *endpoint.ToString());
+	ServerThreads.Add(FRunnableThread::Create(VoxelServers.Add_GetRef(MakeShareable(new VoxelNetThreads::VoxelNetServer(this, socket, endpoint))).Get(), TEXT("VoxelNetServer")));
+	return true;
+}
+#endif
+
+bool APagedWorld::ConnectToServer(uint8 a, uint8 b, uint8 c, uint8 d) {
+#if VOXELNET_CLIENT
+	FSocket* clientSocket = FTcpSocketBuilder("VoxelNetClient").AsReusable().WithReceiveBufferSize(16 * 1024 * 1024).Build(); // todo 
+
+	FIPv4Address ip(a, b, c, d);
+	//FIPv4Address ip(3,90,55,226);
+
+	TSharedRef<FInternetAddr> addr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
+	addr->SetIp(ip.Value);
+	addr->SetPort(VOXELNET_PORT);
+
+	if (clientSocket->Connect(*addr)) {
+		UE_LOG(LogTemp, Warning, TEXT("Client: Connecting to server..."));
+		VoxelClient = MakeShareable(new VoxelNetThreads::VoxelNetClient(this, clientSocket));
+		ClientThread = FRunnableThread::Create(VoxelClient.Get(), TEXT("VoxelNetClient"));
+	}
+	else { UE_LOG(LogTemp, Warning, TEXT("Client: Failed to connect to server.")); }
+	return true;
+#endif
+	return false;
+}
 
 /// spiral loading 
 //

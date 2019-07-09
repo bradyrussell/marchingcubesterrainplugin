@@ -33,10 +33,12 @@ public class MCTPlugin : ModuleRules
                 "LDBPlugin",
                 "UnrealFastNoisePlugin",
                 "RuntimeMeshComponent",
-                                "LDBPluginSnappy",
+                "LDBPluginSnappy",
                 "LDBPluginLevelDB",
                 "Projects",
-                "Engine"
+                "Engine",
+                "Sockets",
+                "Networking"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

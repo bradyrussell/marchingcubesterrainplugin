@@ -15,7 +15,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WorldGenInterpreters.h"
+#include "VoxelNetThreads.h"
+#include "Networking/Public/Common/TcpListener.h"
 #include "PagedWorld.generated.h"
+
+//todo set tcp listener to use my own socket, then set it to auto delete it, with send buffer of 16. 2mb is too small
 
 // voxel config
 #define REGION_SIZE 32 //voxels
@@ -24,6 +28,10 @@
 #define MARCHING_CUBES 1
 #define ASYNC_COLLISION true//!WITH_EDITOR//false
 //#define NEW_REGIONS_PER_TICK 5
+
+#define VOXELNET_SERVER 0 //WITH_SERVER_CODE
+#define VOXELNET_CLIENT 1 //1-WITH_SERVER_CODE
+#define VOXELNET_PORT 9292//9797
 
 //#define REGEN_NULL_REGIONS
 //#define DONT_SAVE
@@ -50,7 +58,7 @@ class APagedRegion;
 class UTerrainPagingComponent;
 
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams( FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial,const uint8, newMaterial);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial);
 
 USTRUCT(BlueprintType)
 	struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
@@ -73,11 +81,23 @@ USTRUCT(BlueprintType)
 };
 
 USTRUCT(BlueprintType)
+	struct FPacketTaskOutput // compressed packet information for a region
+{
+	GENERATED_BODY()
+	FIntVector region;
+	TArray<uint8> packet;
+};
+
+USTRUCT(BlueprintType)
 	struct FVoxelUpdate // a change of a group of voxels from any type to a single new type
 {
 	GENERATED_BODY()
-	FVoxelUpdate(){}
-	FVoxelUpdate(FIntVector Origin, uint8 Radius, uint8 Material, uint8 Density, AActor* causeActor = nullptr, bool IsSpherical = false, bool ShouldDrop = true, bool ShouldCallEvent = true) : origin(Origin), radius(Radius), material(Material), density(Density), bShouldDrop(ShouldDrop), bIsSpherical(IsSpherical), bShouldCallEvent(ShouldCallEvent), causeActor(causeActor) {}
+	FVoxelUpdate() {
+	}
+
+	FVoxelUpdate(FIntVector Origin, uint8 Radius, uint8 Material, uint8 Density, AActor* causeActor = nullptr, bool IsSpherical = false, bool ShouldDrop = true, bool ShouldCallEvent = true)
+		: origin(Origin), radius(Radius), material(Material), density(Density), bShouldDrop(ShouldDrop), bIsSpherical(IsSpherical), bShouldCallEvent(ShouldCallEvent), causeActor(causeActor) {
+	}
 
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
 	FIntVector origin;
@@ -177,6 +197,17 @@ public:
 	void SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
 	bool LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
 
+	UFUNCTION(BlueprintCallable)void NETWORKTEST() {
+#if VOXELNET_SERVER
+		for (auto& elem : VoxelServers) {
+			TArray<TArray<uint8>> upload;
+			regionPackets.GenerateValueArray(upload);
+			UE_LOG(LogTemp, Warning, TEXT("Uploading %d regions"), upload.Num());
+			elem.Get()->UploadRegions(upload);
+		}
+#endif
+	}
+
 	UFUNCTION(BlueprintCallable) void SaveStringToGlobal(FString s);
 	UFUNCTION(BlueprintCallable) FString LoadStringFromGlobal();
 public:
@@ -191,7 +222,30 @@ public:
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 
+	TMap<FIntVector, TArray<uint8>> regionPackets;
+	TQueue<FPacketTaskOutput, EQueueMode::Mpsc> packetQueue;
+
 	leveldb::DB* worldDB;
+
+	//voxelnet functions
+	UFUNCTION(BlueprintCallable)bool StartServer();
+	UFUNCTION(BlueprintCallable)bool ConnectToServer(uint8 a, uint8 b, uint8 c, uint8 d);
+
+#if VOXELNET_SERVER
+	bool OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint);
+
+	TSharedPtr<FTcpListener> ServerListener;
+	TArray<TSharedPtr<VoxelNetThreads::VoxelNetServer>> VoxelServers;
+	TArray<FRunnableThread*> ServerThreads;
+
+	// after handshake we associate playercontrollers with server threads, for uploading regions
+	TMap<APlayerController* ,TSharedPtr<VoxelNetThreads::VoxelNetServer>> PlayerVoxelServers;
+#endif
+
+#if VOXELNET_CLIENT
+	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelClient;
+	FRunnableThread* ClientThread;
+#endif
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager {
@@ -264,7 +318,8 @@ namespace WorldGenThread {
 			for (int32 x = 0; x < REGION_SIZE; x++) {
 				for (int32 y = 0; y < REGION_SIZE; y++) {
 					for (int32 z = 0; z < REGION_SIZE; z++) {
-						if(noise.Num() == 0) return; // this happens if the game quits during worldgen
+						if (noise.Num() == 0)
+							return; // this happens if the game quits during worldgen
 						// todo save function ptr to interp as param that way we can change them on the fly
 						output.voxel[x][y][z] = WorldGen::Interpret_Mars(x + lower.X, y + lower.Y, z + lower.Z, noise);
 					}
@@ -306,6 +361,42 @@ namespace ExtractionThread {
 			                                                 lower.Z + REGION_SIZE));
 
 			world->VolumeMutex.Lock();
+
+			/*
+			 * We generate the packet in the extraction thread because: 
+			 *  that means it has just changed
+			 *  it will likely need to be sent anyways
+			 *  and it is already on another thread with a lock, 
+			 *	where locks are our current biggest slowdown
+			 *	this has be advantage of preventing dos and allowing packet updates to be quick
+			 */
+			// begin packet generation
+			FPacketTaskOutput packetOutput;
+			Packet::RegionData packet;
+			packet.x = lower.X;
+			packet.y = lower.Y;
+			packet.z = lower.Z;
+
+			for (int32 x = 0; x < REGION_SIZE; x++) {
+				for (int32 y = 0; y < REGION_SIZE; y++) {
+					for (int32 z = 0; z < REGION_SIZE; z++) {
+						auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
+						packet.data[0][x][y][z] = voxel.getMaterial();
+						packet.data[1][x][y][z] = voxel.getDensity();
+					}
+				}
+			}
+
+			FBufferArchive packetArchive(true);
+			Packet::MakeRegionContents(packetArchive, packet);
+
+			packetOutput.region = lower;
+			packetOutput.packet = packetArchive;
+
+			world->packetQueue.Enqueue(packetOutput);
+
+			// end packet generation
+
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
 			world->VolumeMutex.Unlock();
 

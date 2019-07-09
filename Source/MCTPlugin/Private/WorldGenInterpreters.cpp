@@ -117,7 +117,10 @@ PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height,
 }
 
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
-	if (noise.Num() == 0) return PolyVox::MaterialDensityPair88();
+	if (noise.Num() == 0) {
+		UE_LOG(LogTemp, Warning, TEXT("Aborting region generation, cannot access noise."))
+		return PolyVox::MaterialDensityPair88();
+	}
 
 	auto _height = noise[0]->GetNoise2D(x, y);
 	//only evaluate noise when you will need it; its expensive. aka return as soon as possible
