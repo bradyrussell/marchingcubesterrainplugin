@@ -19,8 +19,7 @@
 #include "PagedWorld.generated.h"
 
 //todo set tcp listener to use my own socket, then set it to auto delete it, with send buffer of 16. 2mb is too small
-
-
+//todo figure out replicating the regions?
 
 //end config
 
@@ -29,7 +28,6 @@ class UTerrainPagingComponent;
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial);
-
 
 
 #ifdef WORLD_TICK_TRACKING
@@ -46,16 +44,24 @@ public:
 
 protected:
 	void BeginPlay() override;
+	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	void PostInitializeComponents() override;
 
 public:
 	void Tick(float DeltaTime) override;
+
+	UFUNCTION(Category = "Voxel World", BlueprintCallable)
+	void ConnectToDatabase();
+
+	UPROPERTY(Category = "VoxelNet", BlueprintReadWrite, EditAnywhere) bool bIsVoxelNetServer = false;
+	UPROPERTY(Category = "VoxelNet", BlueprintReadWrite, EditAnywhere) bool bIsVoxelNetSingleplayer = false;
 
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event")
 	FVoxelWorldUpdate VoxelWorldUpdate_Event;
 
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
+
 	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) TArray<UMaterialInterface*> TerrainMaterials;
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 
@@ -103,22 +109,11 @@ public:
 	void SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
 	bool LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
 
-	UFUNCTION(BlueprintCallable)void NETWORKTEST() {
-#if VOXELNET_SERVER
-		for (auto& elem : VoxelServers) {
-			TArray<TArray<uint8>> upload;
-			regionPackets.GenerateValueArray(upload); // todo remove regionpackets when a region is despawned>
-			UE_LOG(LogTemp, Warning, TEXT("Uploading %d regions"), upload.Num());
-			elem.Get()->UploadRegions(upload);
-		}
-#endif
-	}
-
 	UFUNCTION(BlueprintCallable) void SaveStringToGlobal(FString s);
 	UFUNCTION(BlueprintCallable) FString LoadStringFromGlobal();
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
-	// todo make queue
+	// 
 	TSet<FIntVector> dirtyRegions;
 	// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
@@ -127,45 +122,36 @@ public:
 
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
-
-#if VOXELNET_SERVER
-
-	TMap<FIntVector, TArray<uint8>> regionPackets;
-	TQueue<FPacketTaskOutput, EQueueMode::Mpsc> packetQueue;
-
-#endif
-
 	leveldb::DB* worldDB;
+	////////// voxelnet stuff below ///////////////
+
+	TMap<FIntVector, TArray<uint8>> VoxelNetServer_regionPackets;
+	TQueue<FPacketTaskOutput, EQueueMode::Mpsc> VoxelNetServer_packetQueue;
 
 	//voxelnet functions
-	UFUNCTION(BlueprintCallable)bool StartServer();
-	UFUNCTION(BlueprintCallable)bool ConnectToServer(uint8 a, uint8 b, uint8 c, uint8 d);
+	UFUNCTION(BlueprintCallable)bool VoxelNetServer_StartServer();
+	UFUNCTION(BlueprintCallable)bool VoxelNetClient_ConnectToServer(uint8 a, uint8 b, uint8 c, uint8 d);
 
-#if VOXELNET_SERVER
-	bool OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint);
 
-	TSharedPtr<FTcpListener> ServerListener;
-	TArray<TSharedPtr<VoxelNetThreads::VoxelNetServer>> VoxelServers;
-	TArray<FRunnableThread*> ServerThreads;
+	bool VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint);
+
+	TSharedPtr<FTcpListener> VoxelNetServer_ServerListener;
+	TArray<TSharedPtr<VoxelNetThreads::VoxelNetServer>> VoxelNetServer_VoxelServers;
+	TArray<FRunnableThread*> VoxelNetServer_ServerThreads;
 
 	// after handshake we associate playercontrollers with server threads, for uploading regions
-	TMap<int64, TSharedPtr<VoxelNetThreads::VoxelNetServer>> SentHandshakes;
-	TMap<APlayerController* ,TSharedPtr<VoxelNetThreads::VoxelNetServer>> PlayerVoxelServers;
-
-	//TQueue<FPendingHandshake, EQueueMode::Mpsc> pendingHandshakeQueue;
-
 	/*
 	 * Server sends handshake
 	 * Client receives and sends the cookie thru their playercontroller to the world Calling ServerRegisterPlayerWithCookie
 	 * RegisterPlayerWithCookie takes a calling playercontroller and a cookie, looks up the cookie in map and associates Player:Socket
 	 *
 	 */
-#endif
+	TMap<int64, TSharedPtr<VoxelNetThreads::VoxelNetServer>> VoxelNetServer_SentHandshakes;
+	TMap<APlayerController*, TSharedPtr<VoxelNetThreads::VoxelNetServer>> VoxelNetServer_PlayerVoxelServers;
 
-#if VOXELNET_CLIENT
-	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelClient;
-	FRunnableThread* ClientThread;
-#endif
+	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
+	FRunnableThread* VoxelNetClient_ClientThread;
+
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager {
@@ -281,40 +267,41 @@ namespace ExtractionThread {
 			                                                 lower.Z + REGION_SIZE));
 
 			world->VolumeMutex.Lock();
-#if VOXELNET_SERVER
-			/*
-			 * We generate the packet in the extraction thread because: 
-			 *  that means it has just changed
-			 *  it will likely need to be sent anyways
-			 *  and it is already on another thread with a lock, 
-			 *	where locks are our current biggest slowdown
-			 *	this has be advantage of preventing dos and allowing packet updates to be quick
-			 */
-			// begin packet generation
-			FPacketTaskOutput packetOutput;
-			Packet::RegionData packet;
-			packet.x = lower.X;
-			packet.y = lower.Y;
-			packet.z = lower.Z;
+			if (world->bIsVoxelNetServer) {
+				/*
+										   * We generate the packet in the extraction thread because: 
+										   *  that means it has just changed
+										   *  it will likely need to be sent anyways in the near future
+										   *  and it is already on another thread with a lock, 
+										   *	where locks are our current biggest slowdown
+										   *	this has be advantage of not being dos-vulnerable and allowing packet updates to be quick
+										   *	so far it has not been a significant issue for performance
+										   */
+				// begin packet generation
+				FPacketTaskOutput packetOutput;
+				Packet::RegionData packet;
+				packet.x = lower.X;
+				packet.y = lower.Y;
+				packet.z = lower.Z;
 
-			for (int32 x = 0; x < REGION_SIZE; x++) {
-				for (int32 y = 0; y < REGION_SIZE; y++) {
-					for (int32 z = 0; z < REGION_SIZE; z++) {
-						auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
-						packet.data[0][x][y][z] = voxel.getMaterial();
-						packet.data[1][x][y][z] = voxel.getDensity();
+				for (int32 x = 0; x < REGION_SIZE; x++) {
+					for (int32 y = 0; y < REGION_SIZE; y++) {
+						for (int32 z = 0; z < REGION_SIZE; z++) {
+							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
+							packet.data[0][x][y][z] = voxel.getMaterial();
+							packet.data[1][x][y][z] = voxel.getDensity();
+						}
 					}
 				}
+
+				FBufferArchive packetArchive(true);
+				Packet::MakeRegionContents(packetArchive, packet);
+
+				packetOutput.region = lower;
+				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
+
+				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 			}
-
-			FBufferArchive packetArchive(true);
-			Packet::MakeRegionContents(packetArchive, packet);
-
-			packetOutput.region = lower;
-			packetOutput.packet = packetArchive;
-
-			world->packetQueue.Enqueue(packetOutput);
-#endif
 			// end packet generation
 
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);

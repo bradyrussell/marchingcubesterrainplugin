@@ -42,14 +42,14 @@ public:
 
 	bool wasCreated[MAX_MATERIALS];
 
-	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* world;
+	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, Replicated, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* world;
 
 	//UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) void SlowRender();
 	//void RenderDecoded(PolyVox::Mesh<PolyVox::Vertex<PolyVox::MaterialDensityPair88>, unsigned int> decoded);
 
 	void RenderParsed(FExtractionTaskOutput output);
 
-	void UpdateNavigation();
+	UFUNCTION(BlueprintCallable) void UpdateNavigation();
 
 private:
 

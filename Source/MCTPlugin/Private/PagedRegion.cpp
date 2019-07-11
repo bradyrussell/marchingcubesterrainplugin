@@ -2,50 +2,20 @@
 #include "PolyVox/CubicSurfaceExtractor.h"
 #include "PolyVox/MarchingCubesSurfaceExtractor.h"
 #include "PolyVox/Mesh.h"
+#include "UnrealNetwork.h"
 
 // Sets default values
 APagedRegion::APagedRegion() {
 	PrimaryActorTick.bCanEverTick = false;
 	Scene = CreateDefaultSubobject<USceneComponent>(FName(TEXT("Root")));
 	SetRootComponent(Scene);
+	bReplicates = true;
 	//wasCreated.AddDefaulted(MAX_MATERIALS);
+	bAlwaysRelevant = true; // test is this fixes culling dist
 }
 
 // Called every frame
-void APagedRegion::Tick(float DeltaTime) {
-	Super::Tick(DeltaTime);
-
-	//if (!extractionResultQueue.IsEmpty()) { 
-
-	//	TArray<FExtractionTaskOutput> gen;
-	//	extractionResultQueue.Dequeue(gen);
-
-	//	int Material = 0;
-
-	//	for (FExtractionTaskOutput r : gen) {
-	//		if (r.Indices.Num() > 0) { // fixes dhd3d resource crash 
-
-	//			FRuntimeMeshDataPtr Data = rMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
-	//			Data->EnterSerializedMode();
-
-	//			if (!wasCreated[Material]) {
-	//				Data->CreateMeshSection(Material, r.Vertices, r.Indices, r.Normals, r.UV0, r.Colors, r.Tangents, true, EUpdateFrequency::Average);
-	//				wasCreated[Material] = true;
-	//			}
-	//			else {
-	//				Data->UpdateMeshSection(Material, r.Vertices, r.Indices, r.Normals, r.UV0, r.Colors, r.Tangents);
-	//			}
-
-	//			auto Section = Data->BeginSectionUpdate(Material); // must be called every update
-	//			rMesh->SetMaterial(Material, world->TerrainMaterials[Material]);
-	//			Section->Commit();
-	//		}
-	//		Material++;
-	//	}
-
-	//	world->MarkRegionDirtyAndAdjacent(FIntVector(GetActorLocation()));
-	//}
-}
+void APagedRegion::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
 
 APagedRegion::~APagedRegion() {
 	//VoxelVolume.Reset();
@@ -69,7 +39,10 @@ void APagedRegion::BeginPlay() {
 
 
 	rMesh->RegisterComponent();
-	//Touch();
+
+	//this is meant to allow the regions map to be replicated
+	if (world)
+		if (!world->bIsVoxelNetServer) { world->regions.Add(FIntVector(GetActorLocation()), this); }
 }
 
 
@@ -242,6 +215,10 @@ void APagedRegion::BeginPlay() {
 
 void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	// run below on gamethread
+	if(rMesh == nullptr) {
+		UE_LOG(LogTemp, Error, TEXT("There is no mesh when trying to render parsed."));
+	}
+
 	for (int32 Material = 0; Material < output.section.Num(); Material++) {
 		if (output.section[Material].Indices.Num() > 0) {
 			// fixes dhd3d resource crash 
@@ -272,3 +249,9 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 }
 
 void APagedRegion::UpdateNavigation() { FNavigationSystem::UpdateComponentData(*rMesh); }
+
+void APagedRegion::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
+
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(APagedRegion, world);
+}

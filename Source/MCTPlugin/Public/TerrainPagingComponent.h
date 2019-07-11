@@ -24,7 +24,7 @@ public:
 
 	//getCurrentRegion
 	TSet<FIntVector> subscribedRegions;
-
+	TSet<FIntVector> waitingForPackets;
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
