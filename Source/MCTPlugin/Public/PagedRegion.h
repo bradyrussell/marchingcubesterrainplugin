@@ -31,10 +31,13 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void PostInitializeComponents() override;
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+
+
 
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadWrite, VisibleAnywhere) class USceneComponent* Scene;
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleAnywhere, Meta = (ExposeFunctionCategories = "Mesh,Rendering,Physics,Components|RuntimeMesh", AllowPrivateAccess = "true"))
@@ -50,6 +53,7 @@ public:
 	void RenderParsed(FExtractionTaskOutput output);
 
 	UFUNCTION(BlueprintCallable) void UpdateNavigation();
+	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
 
 private:
 

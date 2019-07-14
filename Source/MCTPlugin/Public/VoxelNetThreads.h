@@ -19,14 +19,18 @@ namespace VoxelNetThreads {
 		FSocket* socket;
 		FDateTime lastUpdate = FDateTime::MinValue();
 		TQueue<Packet::RegionData, EQueueMode::Mpsc> downloadedRegions;
+		TQueue<int64, EQueueMode::Spsc> handshakes;
 		APagedWorld* world;
 		bool running;
 
 		uint32 remainingRegionsToDownload = 0;
 
+
+
 		VoxelNetClient(APagedWorld* world, FSocket* socket)
 			: socket(socket), world(world), running(true) {
 		}
+
 
 		void Updated() { lastUpdate = FDateTime::Now(); }
 
@@ -51,7 +55,7 @@ namespace VoxelNetThreads {
 		}
 
 		////// runnable api ///////////
-		const int BUFFER_SIZE = 128 * 1024;
+		const int BUFFER_SIZE = 512 * 1024;
 
 		virtual uint32 Run() override {
 			int32 number = 0;
@@ -63,7 +67,7 @@ namespace VoxelNetThreads {
 				KeepAlive();
 				if (socket->HasPendingData(size)) {
 					FArrayReader opcodeBuffer(true);
-					opcodeBuffer.Init(0, BUFFER_SIZE);
+					opcodeBuffer.Init(0, BUFFER_SIZE); // todo wouldnt it be beteer to resuse the same buffer??
 
 					int32 BytesRead = 0;
 
@@ -80,6 +84,7 @@ namespace VoxelNetThreads {
 								opcodeBuffer << version; // actually the opcode
 								opcodeBuffer << version;
 								opcodeBuffer << cookie;
+								handshakes.Enqueue(cookie);
 								UE_LOG(LogTemp, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %llu"), version, cookie);
 							}
 						}
@@ -93,7 +98,7 @@ namespace VoxelNetThreads {
 								opcodeBuffer << regions;
 
 								remainingRegionsToDownload += regions;
-								UE_LOG(LogTemp, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
+								//UE_LOG(LogTemp, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
 								
 							}
 						}
@@ -128,14 +133,7 @@ namespace VoxelNetThreads {
 									Packet::RegionData data;
 									Packet::ParseRegionResponse(opcodeBuffer, data);
 
-									
-
 									downloadedRegions.Enqueue(data);
-
-									//UE_LOG(LogTemp, Warning, TEXT("Client: Check byte is == %d, number %d"), data.data[0][2][3][4], number++);
-									// if (number > 1000)
-									// 	return;
-									// RequestRegion(1, 2, 3);
 								}
 							}
 						}
@@ -207,7 +205,7 @@ namespace VoxelNetThreads {
 			int32 BytesSent = 0;
 			Packet::MakeRegionCount(count, regions);
 			socket->Send(count.GetData(), count.Num(), BytesSent);
-			UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent region count packet: %d. "), *endpoint.ToString(), regions);
+			//UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent region count packet: %d. "), *endpoint.ToString(), regions);
 		}
 
 		////// runnable api ///////////
@@ -243,7 +241,7 @@ namespace VoxelNetThreads {
 					UE_LOG(LogTemp,Warning,TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
 				}
 
-				FPlatformProcess::Sleep(SOCKET_DELAY);
+				FPlatformProcess::Sleep(SOCKET_DELAY * 2); // todo see how changing this affects client
 				uint32 size;
 
 				if (socket->HasPendingData(size)) {

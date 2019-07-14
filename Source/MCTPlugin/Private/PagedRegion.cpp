@@ -42,7 +42,13 @@ void APagedRegion::BeginPlay() {
 
 	//this is meant to allow the regions map to be replicated
 	if (world)
-		if (!world->bIsVoxelNetServer) { world->regions.Add(FIntVector(GetActorLocation()), this); }
+		if (!world->bIsVoxelNetServer) { world->regions.Add(FIntVector(GetRegionLocation()), this); }
+}
+
+void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+		//this is meant to allow the regions map to be replicated
+	if (world)
+		if (!world->bIsVoxelNetServer) { world->regions.Remove(FIntVector(GetRegionLocation())); }
 }
 
 
@@ -249,6 +255,10 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 }
 
 void APagedRegion::UpdateNavigation() { FNavigationSystem::UpdateComponentData(*rMesh); }
+
+FIntVector APagedRegion::GetRegionLocation() const {
+	return FIntVector(GetActorLocation());
+}
 
 void APagedRegion::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
 

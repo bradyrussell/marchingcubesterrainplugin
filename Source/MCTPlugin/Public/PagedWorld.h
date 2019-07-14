@@ -28,7 +28,7 @@ class UTerrainPagingComponent;
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial);
-
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVoxelNetHandshake,const int64, cookie);
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
@@ -58,6 +58,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event")
 	FVoxelWorldUpdate VoxelWorldUpdate_Event;
+
+		UPROPERTY(BlueprintAssignable, Category="VoxelNet Handshake Event")
+	FVoxelNetHandshake VoxelNetHandshake_Event;
 
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
@@ -90,6 +93,10 @@ public:
 	// memory
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) void Flush() const;
+
+	UFUNCTION(Category = "Voxel World - Saving", BlueprintCallable) void ForceSaveWorld() const;
+	UFUNCTION(Category = "Voxel World - Saving", BlueprintImplementableEvent) void PreSaveWorld() const;
+	UFUNCTION(Category = "Voxel World - Saving", BlueprintImplementableEvent) void PostSaveWorld() const;
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void PagingComponentTick();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
@@ -130,7 +137,7 @@ public:
 
 	//voxelnet functions
 	UFUNCTION(BlueprintCallable)bool VoxelNetServer_StartServer();
-	UFUNCTION(BlueprintCallable)bool VoxelNetClient_ConnectToServer(uint8 a, uint8 b, uint8 c, uint8 d);
+	UFUNCTION(BlueprintCallable)bool VoxelNetClient_ConnectToServer(FString ip_str);
 
 
 	bool VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint);
@@ -151,7 +158,6 @@ public:
 
 	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
 	FRunnableThread* VoxelNetClient_ClientThread;
-
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager {
@@ -205,9 +211,8 @@ namespace WorldGenThread {
 		FIntVector lower;
 	public:
 		RegionGenerationTask(APagedWorld* world,
-		                     FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/) {
-			this->world = world;
-			this->lower = lower;
+		                     FIntVector lower/*, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk * pChunk*/):world(world),lower(lower) {
+
 		}
 
 		FORCEINLINE TStatId GetStatId() const {
@@ -248,9 +253,8 @@ namespace ExtractionThread {
 		APagedWorld* world;
 		FIntVector lower;
 	public:
-		ExtractionTask(APagedWorld* world, FIntVector lower) {
-			this->world = world;
-			this->lower = lower;
+		ExtractionTask(APagedWorld* world, FIntVector lower) :world(world),lower(lower){
+
 		}
 
 		FORCEINLINE TStatId GetStatId() const {
