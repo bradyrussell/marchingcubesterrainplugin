@@ -29,6 +29,8 @@ class UTerrainPagingComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVoxelNetHandshake,const int64, cookie);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPreSaveWorld,const bool, isQuitting);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPostSaveWorld,const bool, isQuitting);
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
@@ -59,8 +61,14 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event")
 	FVoxelWorldUpdate VoxelWorldUpdate_Event;
 
-		UPROPERTY(BlueprintAssignable, Category="VoxelNet Handshake Event")
+	UPROPERTY(BlueprintAssignable, Category="VoxelNet Handshake Event")
 	FVoxelNetHandshake VoxelNetHandshake_Event;
+
+	UPROPERTY(BlueprintAssignable, Category="Voxel World - Saving")
+	FPreSaveWorld PreSaveWorld_Event;
+
+	UPROPERTY(BlueprintAssignable, Category="Voxel World - Saving")
+	FPostSaveWorld PostSaveWorld_Event;
 
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
@@ -78,7 +86,7 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 
 	// terrain modification
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, AActor* cause = nullptr, bool bIsSpherical = false);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false);
 
 	// coordinates
 	UFUNCTION(Category = "Voxel Coordinates", BlueprintCallable, BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector voxel);
@@ -94,9 +102,9 @@ public:
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
 	UFUNCTION(Category = "Voxel World - Volume Memory", BlueprintCallable) void Flush() const;
 
-	UFUNCTION(Category = "Voxel World - Saving", BlueprintCallable) void ForceSaveWorld() const;
-	UFUNCTION(Category = "Voxel World - Saving", BlueprintImplementableEvent) void PreSaveWorld() const;
-	UFUNCTION(Category = "Voxel World - Saving", BlueprintImplementableEvent) void PostSaveWorld() const;
+	UFUNCTION(Category = "Voxel World - Saving", BlueprintCallable) void ForceSaveWorld() ;
+	UFUNCTION(Category = "Voxel World - Saving", BlueprintImplementableEvent) void PreSaveWorld();
+	UFUNCTION(Category = "Voxel World - Saving", BlueprintImplementableEvent) void PostSaveWorld();
 
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void PagingComponentTick();
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
@@ -104,32 +112,36 @@ public:
 	UFUNCTION(Category = "VoxelNet", BlueprintCallable) void RegisterPlayerWithCookie(APlayerController* player, int64 cookie);
 
 	// save the actual voxel data to leveldb , stored under region coords X Y Z W where w 2kb is xy layers
-	void SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
-	bool ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
+	static void SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
+	static bool ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
 
 	// save region-specific data to leveldb, for instance entities in the region or special local properties. 
 	// these are separated by indicies based on categories , ideally with decreasing order of relevance as they are ordered by index
-	void SaveRegionalDataToDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive);
-	bool LoadRegionalDataFromDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive);
+	static void SaveRegionalDataToDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive);
+	static bool LoadRegionalDataFromDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive);
 
 	//save map-wide data to leveldb. this is still map specific so universal properties should have their own db. because we prepend a 14 byte tag, the key can be anything including ""
-	void SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
-	bool LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
+	static void SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
+	static bool LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
 
+	UFUNCTION(BlueprintCallable) void TempSaveTransformToGlobal(FString key, FTransform value);
+	UFUNCTION(BlueprintCallable) FTransform TempLoadTransformToGlobal(FString key);
+	
 	UFUNCTION(BlueprintCallable) void SaveStringToGlobal(FString s);
 	UFUNCTION(BlueprintCallable) FString LoadStringFromGlobal();
 public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
 	// 
 	TSet<FIntVector> dirtyRegions;
+	
 	// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
-	//TQueue<FIntVector, EQueueMode::Mpsc> dirtyRegions;
 
 	FCriticalSection VolumeMutex;
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 	leveldb::DB* worldDB;
+	
 	////////// voxelnet stuff below ///////////////
 
 	TMap<FIntVector, TArray<uint8>> VoxelNetServer_regionPackets;
@@ -138,7 +150,7 @@ public:
 	//voxelnet functions
 	UFUNCTION(BlueprintCallable)bool VoxelNetServer_StartServer();
 	UFUNCTION(BlueprintCallable)bool VoxelNetClient_ConnectToServer(FString ip_str);
-
+	UFUNCTION(BlueprintCallable)int32 VoxelNetClient_GetPendingRegionDownloads() const;
 
 	bool VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint);
 
@@ -220,7 +232,7 @@ namespace WorldGenThread {
 		}
 
 		void DoWork() {
-			TArray<UUFNNoiseGenerator*> noise = world->GetNoiseGeneratorArray();
+			const TArray<UUFNNoiseGenerator*> noise = world->GetNoiseGeneratorArray();
 
 			FWorldGenerationTaskOutput output;
 			output.pos = lower;
@@ -270,13 +282,18 @@ namespace ExtractionThread {
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE,
 			                                                 lower.Z + REGION_SIZE));
 
+
+			
 			world->VolumeMutex.Lock();
+
+			if(!world->VoxelVolume.IsValid()) return;
+			
 			if (world->bIsVoxelNetServer) {
 				/*
-										   * We generate the packet in the extraction thread because: 
-										   *  that means it has just changed
-										   *  it will likely need to be sent anyways in the near future
-										   *  and it is already on another thread with a lock, 
+										   *    We generate the packet in the extraction thread because: 
+										   *    that means it has just changed
+										   *    it will likely need to be sent anyways in the near future
+										   *    and it is already on another thread with a lock, 
 										   *	where locks are our current biggest slowdown
 										   *	this has be advantage of not being dos-vulnerable and allowing packet updates to be quick
 										   *	so far it has not been a significant issue for performance

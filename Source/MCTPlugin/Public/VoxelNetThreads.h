@@ -24,9 +24,7 @@ namespace VoxelNetThreads {
 		bool running;
 
 		uint32 remainingRegionsToDownload = 0;
-
-
-
+		
 		VoxelNetClient(APagedWorld* world, FSocket* socket)
 			: socket(socket), world(world), running(true) {
 		}
@@ -99,7 +97,7 @@ namespace VoxelNetThreads {
 
 								remainingRegionsToDownload += regions;
 								//UE_LOG(LogTemp, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
-								
+
 							}
 						}
 						else if (opcodeBuffer[0] == 0x4) {
@@ -149,10 +147,8 @@ namespace VoxelNetThreads {
 							return -opcodeBuffer[0];
 						}
 					}
-				} else {
-					FPlatformProcess::Sleep(SOCKET_DELAY);
 				}
-
+				else { FPlatformProcess::Sleep(SOCKET_DELAY); }
 			}
 			//Disconnect();
 			return 0;
@@ -233,22 +229,22 @@ namespace VoxelNetThreads {
 					TArray<TArray<uint8>> upload;
 					regionSetsToSend.Dequeue(upload);
 					SendRegionNumber(upload.Num());
-					for(auto &elem:upload) {
+					for (auto& elem : upload) {
 						int32 BytesSent = 0;
 						socket->Send(elem.GetData(), elem.Num(), BytesSent);
 						BytesTotal += BytesSent;
 					}
-					UE_LOG(LogTemp,Warning,TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
+					UE_LOG(LogTemp, Warning, TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
 				}
 
-				FPlatformProcess::Sleep(SOCKET_DELAY * 2); // todo see how changing this affects client
+				FPlatformProcess::Sleep(SOCKET_DELAY ); // todo see how changing this affects client
 				uint32 size;
 
 				if (socket->HasPendingData(size)) {
 					FArrayReader opcodeBuffer(true);
 					opcodeBuffer.Init(0, 1024);
 
-					int32 BytesSent = 0;
+					//int32 BytesSent = 0;
 					int32 BytesRead = 0;
 
 					if (socket->Recv(opcodeBuffer.GetData(), 1, BytesRead)) {

@@ -12,7 +12,7 @@
 
 //#define REGEN_NULL_REGIONS
 //#define DONT_SAVE
-//#define WORLD_TICK_TRACKING
+#define WORLD_TICK_TRACKING
 #define DATABASE_OPTIMIZATIONS
 
 // db config
@@ -22,7 +22,7 @@
 #define DB_VERSION 2 // changes when non backwards compatible changes to the structure occur
 
 // regional data offsets, max of 255 - REGION_SIZE 
-#define REGIONAL_DATA_RESERVED 0 // use for local conditions like weather, air quality etc?
+#define REGIONAL_DATA_BUILDING 0 // store a TArray<TArray<uint8>> where each element of top level array is a serialized building
 #define REGIONAL_DATA_ENTITY 1 // store an array of actor archives with spawn information
 #define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
 #define REGIONAL_DATA_RESOURCES 3 // store dropped items

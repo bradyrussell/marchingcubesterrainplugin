@@ -100,7 +100,7 @@ PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height,
 		if(_height - 1024+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_URANIUM, 200+randomness);
 		if(_height - 256+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_GOLD, 200+randomness);
 		if(_height - 128+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_IRON, 200+randomness);
-		if(_height - 1+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_COAL, 200+randomness);
+		if(_height - -8+randomness > z) return PolyVox::MaterialDensityPair88(MATERIAL_COAL, 200+randomness);
 		
 	}
 
