@@ -5,8 +5,7 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FMCTPluginModule : public IModuleInterface
-{
+class FMCTPluginModule : public IModuleInterface {
 public:
 
 	/** IModuleInterface implementation */

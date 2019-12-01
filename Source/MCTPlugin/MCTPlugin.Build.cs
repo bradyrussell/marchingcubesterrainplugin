@@ -30,10 +30,15 @@ public class MCTPlugin : ModuleRules
 			{
 				"Core",
                 "CoreUObject",
+                "LDBPlugin",
                 "UnrealFastNoisePlugin",
                 "RuntimeMeshComponent",
+                "LDBPluginSnappy",
+                "LDBPluginLevelDB",
                 "Projects",
-                "Engine"
+                "Engine",
+                "Sockets",
+                "Networking"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -43,7 +48,10 @@ public class MCTPlugin : ModuleRules
 			new string[]
 			{
                                  "UnrealFastNoisePlugin",
-                "RuntimeMeshComponent"//"UnrealFastNoisePlugin", "RuntimeMeshComponent"// ... add private dependencies that you statically link with here ...	
+                                  "LDBPlugin",
+                "RuntimeMeshComponent",
+                                "LDBPluginSnappy",
+                "LDBPluginLevelDB"//"UnrealFastNoisePlugin", "RuntimeMeshComponent"// ... add private dependencies that you statically link with here ...	
 			}
 			);
 		

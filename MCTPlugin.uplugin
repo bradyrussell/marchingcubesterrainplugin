@@ -26,6 +26,10 @@
       "Enabled": true
     },
     {
+      "Name": "LDBPlugin",
+      "Enabled": true
+    },
+    {
       "Name": "UnrealFastNoisePlugin",
       "Enabled": true
     }
