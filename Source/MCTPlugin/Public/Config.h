@@ -4,8 +4,6 @@
 #define REGION_SIZE 32 //voxels
 #define VOXEL_SIZE 100 // cm
 #define MAX_MATERIALS 6
-#define MARCHING_CUBES 0
-//#define NEW_REGIONS_PER_TICK 5
 
 #define VOXELNET_PORT 9292//9797
 

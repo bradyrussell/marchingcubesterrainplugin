@@ -9,7 +9,6 @@
 #include <PolyVox/MaterialDensityPair.h>
 #include "MemoryReader.h"
 #include "Kismet/GameplayStatics.h"
-#include "DrawDebugHelpers.h"
 #include "ISavableWithRegion.h"
 #include "ExtractionThreads.h"
 #include "WorldGenThreads.h"
@@ -399,6 +398,8 @@ FIntVector APagedWorld::VoxelToRegionCoords(FIntVector voxel) {
 }
 
 FIntVector APagedWorld::WorldToVoxelCoords(FVector world) { return FIntVector(world / VOXEL_SIZE); }
+
+FVector APagedWorld::VoxelToWorldCoords(FIntVector voxel) { return FVector(voxel * VOXEL_SIZE); }
 
 void APagedWorld::beginWorldGeneration(FIntVector pos) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {

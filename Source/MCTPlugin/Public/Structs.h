@@ -10,6 +10,35 @@
 #include "Config.h"
 #include "Structs.generated.h"
 
+//https://garvinized.com/posts/2016/voxel-terrain-in-unreal-engine-4-part-3/
+// Bridge between PolyVox Vector3DFloat and Unreal Engine 4 FVector
+struct FPolyVoxVector : public FVector {
+	FORCEINLINE FPolyVoxVector() {
+	}
+
+	explicit FORCEINLINE FPolyVoxVector(EForceInit E)
+		: FVector(E) {
+	}
+
+	FORCEINLINE FPolyVoxVector(float InX, float InY, float InZ)
+		: FVector(InX, InY, InX) {
+	}
+
+	FORCEINLINE FPolyVoxVector(const FVector& InVec) { FVector::operator=(InVec); }
+
+	FORCEINLINE FPolyVoxVector(const PolyVox::Vector3DFloat& InVec) { operator=(InVec); }
+
+	FORCEINLINE FVector& operator=(const PolyVox::Vector3DFloat& Other) {
+		this->X = Other.getX();
+		this->Y = Other.getY();
+		this->Z = Other.getZ();
+
+		DiagnosticCheckNaN();
+
+		return *this;
+	}
+};
+
 USTRUCT(BlueprintType)
 	struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
 {
