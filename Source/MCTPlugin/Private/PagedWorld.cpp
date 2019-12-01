@@ -11,6 +11,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 #include "ISavableWithRegion.h"
+#include "ExtractionThreads.h"
+#include "WorldGenThreads.h"
 //#include "BuildingUnitBase.h"
 
 #ifdef WORLD_TICK_TRACKING
@@ -27,10 +29,7 @@ APagedWorld::APagedWorld() {
 	bReplicates = true;
 }
 
-APagedWorld::~APagedWorld() {
-
-
-}
+APagedWorld::~APagedWorld() {}
 
 // Called when the game starts or when spawned
 void APagedWorld::BeginPlay() { Super::BeginPlay(); }
@@ -49,7 +48,7 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 		VoxelNetServer_ServerListener.Reset();
 		UE_LOG(LogTemp, Warning, TEXT("VoxelNet server has stopped."));
 	}
-	else {
+	else if (!bIsVoxelNetSingleplayer){
 		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet client..."));
 		if (VoxelNetClient_ClientThread)
 			VoxelNetClient_ClientThread->Kill(true);
@@ -117,6 +116,7 @@ void APagedWorld::Tick(float DeltaTime) {
 					}
 				}
 				remainingRegionsToGenerate--;
+				MarkRegionDirtyAndAdjacent(gen.pos);
 			}
 		}
 
@@ -198,7 +198,6 @@ void APagedWorld::Tick(float DeltaTime) {
 
 		VolumeMutex.Unlock();
 
-
 		for (auto& region : dirtyClone) {
 			// if we render unloaded regions we get cascading world gen
 			if (regions.Contains(region) || (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)) // if it is not in regions it will get discarded
@@ -276,18 +275,17 @@ void APagedWorld::Tick(float DeltaTime) {
 #endif
 }
 
-void APagedWorld::ConnectToDatabase() {
+void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		leveldb::Options options;
 		options.create_if_missing = true;
 
-#ifdef DATABASE_OPTIMIZATIONS
 		//options.write_buffer_size = 120 * 1048576;
 		options.block_cache = leveldb::NewLRUCache(8 * 1048576);
 		options.filter_policy = leveldb::NewBloomFilterPolicy(10);
-#endif
 
-		FString dbname = FPaths::ProjectSavedDir() + DB_NAME;
+		DatabaseName = Name;
+		FString dbname = FPaths::ProjectSavedDir() + "World_" + DatabaseName;//DB_NAME;
 
 		leveldb::Status status = leveldb::DB::Open(options, std::string(TCHAR_TO_UTF8(*dbname)), &worldDB);
 
@@ -305,7 +303,7 @@ void APagedWorld::ConnectToDatabase() {
 			versionReader << db_version; // read version if one existed
 			versionReader.FlushCache();
 			versionReader.Close();
-			UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. We expect %d."), *dbname, db_version, DB_VERSION);
+			UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Compatible? %s."), *dbname, db_version, db_version==DB_VERSION? TEXT("yes") : TEXT("no"));
 			assert(db_version == DB_VERSION);
 		}
 		else {
@@ -336,15 +334,12 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 		UE_LOG(LogTemp, Verbose, TEXT("Client tried to access nonexistant region %s."), *pos.ToString());
 		return nullptr;
 	}
-	//FActorSpawnParameters param; 
-	const FVector fpos = FVector(pos);
 
-	//UE_LOG(LogTemp, Warning, TEXT("Spawning a new region actor at %s."), *pos.ToString());
-
+	const FVector fpos = FVector(pos * VOXEL_SIZE);
 
 	try {
 		APagedRegion* region = GetWorld()->SpawnActorDeferred<APagedRegion>(APagedRegion::StaticClass(), FTransform(FRotator::ZeroRotator), GetOwner());
-		region->world = this;
+		region->World = this;
 		UGameplayStatics::FinishSpawningActor(region, FTransform(FRotator::ZeroRotator, fpos));
 
 		regions.Add(pos, region);
@@ -358,7 +353,13 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	}
 }
 
-void APagedWorld::QueueRegionRender(FIntVector pos) { (new FAutoDeleteAsyncTask<ExtractionThread::ExtractionTask>(this, pos))->StartBackgroundTask(); }
+void APagedWorld::QueueRegionRender(FIntVector pos) {
+	if(bRenderMarchingCubes){
+		(new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask();
+	} else {
+		(new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask();
+	}
+}
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 
@@ -400,9 +401,9 @@ FIntVector APagedWorld::VoxelToRegionCoords(FIntVector voxel) {
 FIntVector APagedWorld::WorldToVoxelCoords(FVector world) { return FIntVector(world / VOXEL_SIZE); }
 
 void APagedWorld::beginWorldGeneration(FIntVector pos) {
-	if (bIsVoxelNetServer) {
+	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		remainingRegionsToGenerate++;
-		(new FAutoDeleteAsyncTask<WorldGenThread::RegionGenerationTask>(this, pos))->StartBackgroundTask();
+		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, pos))->StartBackgroundTask();
 	}
 }
 
@@ -734,13 +735,10 @@ FString APagedWorld::LoadStringFromGlobal() {
 
 bool APagedWorld::VoxelNetServer_StartServer() {
 	if (bIsVoxelNetServer) {
-		const FIPv4Endpoint Endpoint(FIPv4Address::Any,VOXELNET_PORT);
+		const FIPv4Endpoint Endpoint(FIPv4Address::Any,VOXELNET_PORT); //todo BindNextPort and communicate it to clients ingame on join
 		VoxelNetServer_ServerListener = MakeShareable(new FTcpListener(Endpoint));
-
 		auto listener = VoxelNetServer_ServerListener.Get();
-
 		listener->OnConnectionAccepted().BindUObject(this, &APagedWorld::VoxelNetServer_OnConnectionAccepted);
-
 		return listener->Init() && listener->OnConnectionAccepted().IsBound() && listener->IsActive();
 	}
 	return false;
@@ -815,13 +813,3 @@ int32 APagedWorld::VoxelNetClient_GetPendingRegionDownloads() const {
 	// todo this is not thread safe
 	return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload;
 }
-
-/// spiral loading 
-//
-//
-//for (int i = -rad; i < rad; i++) {
-//	doSpawn(i, -rad);
-//	doSpawn(i, rad-1);
-//	doSpawn(-rad, i);
-//	doSpawn(rad-1, i);
-//}

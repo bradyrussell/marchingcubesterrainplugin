@@ -81,8 +81,7 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 
 PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height, float _caves, float _ore) {
 	PolyVox::MaterialDensityPair88 Voxel;
-
-
+	
 	if (z < (_height + 4) && (_caves > 1)) {
 		return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
 	}
@@ -151,4 +150,12 @@ EBiome WorldGen::Interpret_Biome(float _height, float temperatue, float moisture
 	//if(_height > 64) return MOUNTAINS;
 	//if(_height > 0) return PLAINS;
 	return MOUNTAINS;
+}
+
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
+	if(z > noise[0]->GetNoise2D(x, y)) {
+		return PolyVox::MaterialDensityPair88(0,0);
+	} else {
+		return PolyVox::MaterialDensityPair88(2,255);
+	}
 }
