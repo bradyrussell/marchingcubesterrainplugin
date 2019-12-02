@@ -27,7 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPreSaveWorld,const bool, isQuitting
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPostSaveWorld,const bool, isQuitting);
 
 #ifdef WORLD_TICK_TRACKING
-DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
+	DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
 #endif
 
 UCLASS()
@@ -48,14 +48,14 @@ public:
 
 	/* World */
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
-	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector voxel);
-	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) static FIntVector WorldToVoxelCoords(FVector world);
-	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) FVector VoxelToWorldCoords(FIntVector voxel);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) FVector VoxelToWorldCoords(FIntVector VoxelCoords);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false);
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event") FVoxelWorldUpdate VoxelWorldUpdate_Event;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bUseAsyncCollision = true;
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
-	FCriticalSection VolumeMutex;
+	FCriticalSection VolumeMutex; // lock for VoxelVolume
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 
 	/* Database */
@@ -89,8 +89,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPostSaveWorld PostSaveWorld_Event;
 
 	/* Generation */
-	UFUNCTION(BlueprintImplementableEvent) const TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray(); // can this be const?
-	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void beginWorldGeneration(FIntVector pos);
+	UFUNCTION(BlueprintImplementableEvent) const TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray(); 
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void BeginWorldGeneration(FIntVector RegionCoords);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(FIntVector pos, int32 radius) const;
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PagingComponentTick();
@@ -130,7 +130,7 @@ public:
 	TMap<APlayerController*, TSharedPtr<VoxelNetThreads::VoxelNetServer>> VoxelNetServer_PlayerVoxelServers;
 
 	/* Voxelnet Client */
-	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)bool VoxelNetClient_ConnectToServer(FString ip_str);
+	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)bool VoxelNetClient_ConnectToServer(FString Host, int32 Port = 0);
 	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)int32 VoxelNetClient_GetPendingRegionDownloads() const;
 	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
 	FRunnableThread* VoxelNetClient_ClientThread;

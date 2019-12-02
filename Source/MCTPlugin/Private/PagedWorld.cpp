@@ -1,5 +1,4 @@
 #include "PagedWorld.h"
-#include "WorldGenInterpreters.h"
 #include "PagedRegion.h"
 #include "TerrainPagingComponent.h"
 #include "leveldb/filter_policy.h"
@@ -12,25 +11,21 @@
 #include "ISavableWithRegion.h"
 #include "ExtractionThreads.h"
 #include "WorldGenThreads.h"
-//#include "BuildingUnitBase.h"
 
 #ifdef WORLD_TICK_TRACKING
-DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
-DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
-DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
-DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
+	DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
+	DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
+	DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
+	DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
 #endif
 
-// Sets default values
 APagedWorld::APagedWorld() {
-	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 }
 
 APagedWorld::~APagedWorld() {}
 
-// Called when the game starts or when spawned
 void APagedWorld::BeginPlay() { Super::BeginPlay(); }
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
@@ -75,10 +70,8 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	UE_LOG(LogTemp, Warning, TEXT("World database saved in %f ms."), afterSave.GetTotalMicroseconds()*0.001);
 }
 
-// Called every frame
 void APagedWorld::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
-
 	// get any recently generated packets and put them in the queue
 	if (bIsVoxelNetServer) {
 		while (!VoxelNetServer_packetQueue.IsEmpty()) {
@@ -91,9 +84,6 @@ void APagedWorld::Tick(float DeltaTime) {
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
 #endif
-
-		int NewRegions = 0;
-
 		VolumeMutex.Lock();
 		// pop render queue
 		// queue is multi input single consumer
@@ -101,10 +91,8 @@ void APagedWorld::Tick(float DeltaTime) {
 			// only the server / singleplayer generates world
 			while (!worldGenerationQueue.IsEmpty()) {
 				// doing x per tick reduces hitches by a good amount, but causes slower loading times
-
 				FWorldGenerationTaskOutput gen;
 				worldGenerationQueue.Dequeue(gen);
-
 
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
@@ -151,7 +139,7 @@ void APagedWorld::Tick(float DeltaTime) {
 				}
 			}
 			catch (...) {
-				UE_LOG(LogTemp, Warning, TEXT("Caught exception in voxelUpdateQueue processing."));
+				UE_LOG(LogTemp, Error, TEXT("Caught exception in voxelUpdateQueue processing."));
 				continue;
 			}
 		}
@@ -160,18 +148,16 @@ void APagedWorld::Tick(float DeltaTime) {
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
 #endif
-		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time i think
-		dirtyRegions.Reset(); // leave slack
-		//todo todo todo i think the issue where i need to modify terrain is because it isnt marked dirty on the client, thus modifying it fixes
+		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time 
+		dirtyRegions.Reset(); 
 		if (!bIsVoxelNetServer) {
 			if (VoxelNetClient_VoxelClient.IsValid()) {
 				auto client = VoxelNetClient_VoxelClient.Get();
 
 				while (!client->handshakes.IsEmpty()) {
-					// while we have a reference to the client may as well
+					// while we have a reference to the client may as well process handshakes
 					int64 cookie = 0;
 					client->handshakes.Dequeue(cookie);
-
 					if (VoxelNetHandshake_Event.IsBound()) { VoxelNetHandshake_Event.Broadcast(cookie); }
 				}
 
@@ -187,9 +173,6 @@ void APagedWorld::Tick(float DeltaTime) {
 						}
 					}
 					const auto pos = FIntVector(data.x, data.y, data.z);
-
-					//getRegionAt(pos); // todo <----------------------------------------------
-
 					MarkRegionDirtyAndAdjacent(pos);
 				}
 			}
@@ -208,8 +191,6 @@ void APagedWorld::Tick(float DeltaTime) {
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldClearExtractionQueue);
 #endif
-
-
 		TArray<FIntVector> VoxelNetServer_justCookedRegions;
 
 		while (!extractionQueue.IsEmpty()) {
@@ -223,12 +204,11 @@ void APagedWorld::Tick(float DeltaTime) {
 
 				if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
-			else {
-				//UE_LOG(LogTemp, Error, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
+			else { // 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
+				UE_LOG(LogTemp, Warning, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
 				//DrawDebugBox(this->GetWorld(), FVector(gen.region * 3200), FVector(1600), FColor::Emerald);
 			}
 		}
-
 
 		if (bIsVoxelNetServer) {
 			if (VoxelNetServer_justCookedRegions.Num() > 0) {
@@ -251,12 +231,6 @@ void APagedWorld::Tick(float DeltaTime) {
 								if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
 									auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
 									server->Get()->UploadRegions(packets);
-									//UE_LOG(LogTemp, Warning, TEXT("Sent delayed packets %d."), packets.Num());
-									// todo remove debug test code 
-									// this will mirror all pagers to all clients
-									//for (auto& serversTest : VoxelNetServer_VoxelServers) { serversTest.Get()->UploadRegions(packets); }
-
-									// todo remove debug test code 
 								}
 								else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
 							}
@@ -279,21 +253,17 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 		leveldb::Options options;
 		options.create_if_missing = true;
 
-		//options.write_buffer_size = 120 * 1048576;
+		//options.write_buffer_size = 120 * 1048576; // todo make configurable in BP?
 		options.block_cache = leveldb::NewLRUCache(8 * 1048576);
 		options.filter_policy = leveldb::NewBloomFilterPolicy(10);
 
 		DatabaseName = Name;
-		FString dbname = FPaths::ProjectSavedDir() + "World_" + DatabaseName;//DB_NAME;
+		FString dbname = FPaths::ProjectSavedDir() + "World_" + DatabaseName;
 
 		leveldb::Status status = leveldb::DB::Open(options, std::string(TCHAR_TO_UTF8(*dbname)), &worldDB);
-
-		bool b = status.ok();
-		check(status.ok());
-
-		FString db_check = b ? "SUCCESS" : "FAILURE";
-
-		UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %s"), *dbname, *db_check);
+		
+		UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %s"), *dbname, status.ok() ? TEXT("Success") :  TEXT("Failure"));
+		ensure(status.ok());
 
 		TArray<uint8> versionArchive;
 		if (LoadGlobalDataFromDatabase(worldDB, DB_VERSION_TAG, versionArchive)) {
@@ -302,7 +272,7 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 			versionReader << db_version; // read version if one existed
 			versionReader.FlushCache();
 			versionReader.Close();
-			UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Compatible? %s."), *dbname, db_version, db_version==DB_VERSION? TEXT("yes") : TEXT("no"));
+			UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Compatible? %s."), *dbname, db_version, db_version==DB_VERSION? TEXT("Yes") : TEXT("No"));
 			assert(db_version == DB_VERSION);
 		}
 		else {
@@ -315,13 +285,9 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 }
 
 void APagedWorld::PostInitializeComponents() {
-
-	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this))); //,256*1024*1024,REGION_SIZE));
-
-	// Call the base class's function.
+	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this),256*1024*1024,REGION_SIZE));
 	Super::PostInitializeComponents();
 }
-
 
 void APagedWorld::RegisterPagingComponent(UTerrainPagingComponent* pagingComponent) { pagingComponents.AddUnique(pagingComponent); }
 
@@ -361,20 +327,10 @@ void APagedWorld::QueueRegionRender(FIntVector pos) {
 }
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
-
-	// for(int8 x = -1; x < 2; x++) {
-	// 	for(int8 y = -1; y < 2; y++) {
-	// 		for(int8 z = -1; z < 2; z++) {
-	// 			dirtyRegions.Emplace(pos+FIntVector(x*REGION_SIZE,y*REGION_SIZE,z*REGION_SIZE));
-	// 		}
-	// 	}
-	// }
-
 	dirtyRegions.Emplace(pos);
 	dirtyRegions.Emplace(pos + FIntVector(REGION_SIZE, 0, 0));
 	dirtyRegions.Emplace(pos + FIntVector(0, REGION_SIZE, 0));
 	dirtyRegions.Emplace(pos + FIntVector(0, 0, REGION_SIZE));
-
 	dirtyRegions.Emplace(pos + FIntVector(-REGION_SIZE, 0, 0));
 	dirtyRegions.Emplace(pos + FIntVector(0, -REGION_SIZE, 0));
 	dirtyRegions.Emplace(pos + FIntVector(0, 0, -REGION_SIZE));
@@ -387,24 +343,24 @@ void APagedWorld::PrefetchRegionsInRadius(FIntVector pos, int32 radius) const {
 	VoxelVolume.Get()->prefetch(reg);
 }
 
-bool APagedWorld::ModifyVoxel(FIntVector pos, uint8 r, uint8 m, uint8 d, AActor* cause, bool bIsSpherical) {
-	voxelUpdateQueue.Enqueue(FVoxelUpdate(pos, r, m, d, cause, bIsSpherical));
+bool APagedWorld::ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) {
+	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation, Radius, Material, Density, cause, bIsSpherical));
 	return true;
 }
 
-FIntVector APagedWorld::VoxelToRegionCoords(FIntVector voxel) {
-	const FVector tmp = FVector(voxel) / (float)REGION_SIZE;
+FIntVector APagedWorld::VoxelToRegionCoords(FIntVector VoxelCoords) {
+	const FVector tmp = FVector(VoxelCoords) / (float)REGION_SIZE;
 	return FIntVector(FMath::FloorToInt(tmp.X), FMath::FloorToInt(tmp.Y), FMath::FloorToInt(tmp.Z)) * 32;
 }
 
-FIntVector APagedWorld::WorldToVoxelCoords(FVector world) { return FIntVector(world / VOXEL_SIZE); }
+FIntVector APagedWorld::WorldToVoxelCoords(FVector WorldCoords) { return FIntVector(WorldCoords / VOXEL_SIZE); }
 
-FVector APagedWorld::VoxelToWorldCoords(FIntVector voxel) { return FVector(voxel * VOXEL_SIZE); }
+FVector APagedWorld::VoxelToWorldCoords(FIntVector VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
 
-void APagedWorld::beginWorldGeneration(FIntVector pos) {
+void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		remainingRegionsToGenerate++;
-		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, pos))->StartBackgroundTask();
+		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, RegionCoords))->StartBackgroundTask();
 	}
 }
 
@@ -425,27 +381,22 @@ void APagedWorld::PagingComponentTick() {
 		return;
 
 	TSet<FIntVector> regionsToLoad;
-
 	TSet<UTerrainPagingComponent*> toRemove;
 
 	for (auto& pager : pagingComponents) {
 		if (!IsValid(pager)) { toRemove.Add(pager); } // fixed concurrent modification 8/24/19
 		else {
-			//#if VOXELNET_SERVER
 			auto previousSubscribedRegions = pager->subscribedRegions;
 			pager->subscribedRegions.Reset();
-			//#endif
+
 			int radius = pager->viewDistance;
 			FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
 
-			for (int z = -radius; z <= radius; z++) {
-				// top down makes it feel faster
+			for (int z = -radius; z <= radius; z++) {// top down makes it feel faster
 				for (int y = -radius; y <= radius; y++) {
 					for (int x = -radius; x <= radius; x++) {
-						FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z); // -z means we gen higher regions first?
-						//#if VOXELNET_SERVER
+						FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z);
 						pager->subscribedRegions.Emplace(surrounding);
-						//#endif
 						regionsToLoad.Emplace(surrounding);
 					}
 				}
@@ -460,7 +411,6 @@ void APagedWorld::PagingComponentTick() {
 						// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
 					else {
 						pager->waitingForPackets.Add(uploadRegion);
-						//UE_LOG(LogTemp, Warning, TEXT("Tried to send nonexistent packet %s, delaying it."), *uploadRegion.ToString());
 					}
 				}
 
@@ -490,9 +440,8 @@ void APagedWorld::PagingComponentTick() {
 }
 
 void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
-	TArray<FIntVector> currentRegionsArr;
-	int num = regions.GetKeys(currentRegionsArr);
-	TSet<FIntVector> currentRegions(currentRegionsArr);
+	const TArray<FIntVector> currentRegionsArr;
+	const TSet<FIntVector> currentRegions(currentRegionsArr);
 
 	auto toUnload = currentRegions.Difference(regionsToLoad); // to unload
 	auto toLoad = regionsToLoad.Difference(currentRegions); // to load
@@ -505,13 +454,12 @@ void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
 			MarkRegionDirtyAndAdjacent(load);
 		}
 	}
-
 }
 
 void APagedWorld::RegisterPlayerWithCookie(APlayerController* player, int64 cookie) {
 	if (bIsVoxelNetServer) {
 		if (VoxelNetServer_SentHandshakes.Contains(cookie)) {
-			auto handshake = VoxelNetServer_SentHandshakes.FindRef(cookie);
+			const auto handshake = VoxelNetServer_SentHandshakes.FindRef(cookie);
 			VoxelNetServer_SentHandshakes.Remove(cookie);
 
 			if (handshake.IsValid() && Role == ROLE_Authority) {
@@ -531,11 +479,9 @@ WorldPager::WorldPager(APagedWorld* World)
 
 void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
-		FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
-
-		bool regionExists = world->ReadChunkFromDatabase(world->worldDB, pos, pChunk);
-
-		if (!regionExists) { world->beginWorldGeneration(pos); }
+		const auto pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
+		const auto bRegionExists = world->ReadChunkFromDatabase(world->worldDB, pos, pChunk);
+		if (!bRegionExists) { world->BeginWorldGeneration(pos); }
 	}
 	return;
 }
@@ -543,7 +489,7 @@ void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<Poly
 
 void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
-		FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
+		const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
 		// get savablewithregion actors in this region
 		TArray<AActor*> outActors;
@@ -568,10 +514,8 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 
 std::string ArchiveToString(TArray<uint8>& archive) {
 	const auto out = std::string((char*)archive.GetData(), archive.Num());
-	//UE_LOG(LogTemp, Warning, TEXT("Encoded archive of %d bytes to string."), out.length());
 	return out;
 }
-
 
 void ArchiveFromString(std::string input, TArray<uint8>& archive) {
 	const int len = input.length();
@@ -583,10 +527,6 @@ void ArchiveFromString(std::string input, TArray<uint8>& archive) {
 	archive.AddZeroed(len);
 
 	for (int i = 0; i < len; i++) { archive[i] = (unsigned char)input[i]; }
-
-	//UE_LOG(LogTemp, Warning, TEXT("Extracted archive of %d bytes from string."), len);
-	//memcpy((void*)s, archive.GetData(), len); // both leave the zeroes , need to investigate
-	//FGenericPlatformMemory::Memcpy((void*)input.c_str(),archive.GetData(), len);
 }
 
 std::string SerializeLocationString(int32_t X, int32_t Y, int32_t Z, uint8 W) {
@@ -605,8 +545,9 @@ void APagedWorld::SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::
 		// for each x,y layer
 		char byteBuf[2 * REGION_SIZE * REGION_SIZE]; // 2kb for 32^2, material and density 1 byte each
 
-		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
-
+		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order?
+		// x + (y*REGION_SIZE)
+		
 		for (char x = 0; x < REGION_SIZE; x++) {
 			for (char y = 0; y < REGION_SIZE; y++) {
 				auto uVoxel = pChunk->getVoxel(x, y, w);
@@ -616,7 +557,6 @@ void APagedWorld::SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::
 
 				byteBuf[n++] = mat;
 				byteBuf[n++] = den;
-				//UE_LOG(LogTemp, Warning, TEXT("[debug] m%d d%d  n%d"), mat,den,n);
 			}
 		}
 
@@ -644,7 +584,6 @@ bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox
 				unsigned char mat = chunkData[n++]; // signed - > unsigned conversion
 				unsigned char den = chunkData[n++];
 
-				//auto voxel = PolyVox::MaterialDensityPair88(mat,den);
 				if (mat != 0)
 					containsNonZero = true;
 				pChunk->setVoxel(x, y, w, PolyVox::MaterialDensityPair88(mat, den));
@@ -764,19 +703,16 @@ bool APagedWorld::VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIP
 }
 
 
-bool APagedWorld::VoxelNetClient_ConnectToServer(FString ip_str) {
+bool APagedWorld::VoxelNetClient_ConnectToServer(FString Host, int32 Port) {
 	if (!bIsVoxelNetServer) {
 		FSocket* clientSocket = FTcpSocketBuilder("VoxelNetClient").AsReusable().WithReceiveBufferSize(64 * 1024 * 1024).Build(); // todo 
-
 		uint32 resolvedIP = 0;
-
 		TSharedPtr<FInternetAddr> addr;
-
 		// resolve hostname
-		const bool wasCached = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetHostByNameFromCache(TCHAR_TO_ANSI(*ip_str), addr);
+		const bool wasCached = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetHostByNameFromCache(TCHAR_TO_ANSI(*Host), addr);
 
 		if (!wasCached) {
-			auto ResolveInfo = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetHostByName(TCHAR_TO_ANSI(*ip_str));
+			auto ResolveInfo = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->GetHostByName(TCHAR_TO_ANSI(*Host));
 			while (!ResolveInfo->IsComplete());
 			if (ResolveInfo->GetErrorCode() == 0) {
 				const FInternetAddr* add = &ResolveInfo->GetResolvedAddress();
@@ -785,7 +721,7 @@ bool APagedWorld::VoxelNetClient_ConnectToServer(FString ip_str) {
 
 			if (resolvedIP == 0) {
 				FIPv4Address ip;
-				FIPv4Address::Parse(ip_str, ip);
+				FIPv4Address::Parse(Host, ip);
 
 				addr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
 				addr->SetIp(ip.Value);
@@ -796,8 +732,7 @@ bool APagedWorld::VoxelNetClient_ConnectToServer(FString ip_str) {
 			}
 		}
 
-
-		addr->SetPort(VOXELNET_PORT);
+		addr->SetPort(Port > 0 ? Port : VOXELNET_PORT);
 
 		if (clientSocket->Connect(*addr)) {
 			UE_LOG(LogTemp, Warning, TEXT("Client: Connecting to server %s..."), *addr->ToString(true));

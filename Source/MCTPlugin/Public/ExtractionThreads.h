@@ -158,8 +158,8 @@ namespace ExtractionThreads {
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
-			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE,
-			                                                 lower.Z + REGION_SIZE));
+			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE-1, lower.Y + REGION_SIZE-1,
+			                                                 lower.Z + REGION_SIZE-1)); // not sure why cubic needs -1
 
 
 			

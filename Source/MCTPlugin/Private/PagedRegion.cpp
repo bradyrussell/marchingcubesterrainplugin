@@ -27,8 +27,8 @@ void APagedRegion::BeginPlay() {
 
 	/// DISABLING THIS STOPS THE NAN ERROR IN EDITOR. 
 	RuntimeMesh->SetCollisionUseAsyncCooking(World->bUseAsyncCollision); // this gave more performance gains than all the render queues as far as i can tell
-	RuntimeMesh->RegisterComponent();
-
+	RuntimeMesh->RegisterComponent(); // NAN error happens on this call
+	
 	//this is meant to allow the regions map to be replicated
 	if (World)
 		if (!World->bIsVoxelNetServer) { World->regions.Add(FIntVector(GetRegionLocation()), this); }
