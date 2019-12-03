@@ -13,10 +13,10 @@
 #include "WorldGenThreads.h"
 
 #ifdef WORLD_TICK_TRACKING
-	DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
-	DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
-	DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
-	DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
 #endif
 
 APagedWorld::APagedWorld() {
@@ -24,7 +24,8 @@ APagedWorld::APagedWorld() {
 	bReplicates = true;
 }
 
-APagedWorld::~APagedWorld() {}
+APagedWorld::~APagedWorld() {
+}
 
 void APagedWorld::BeginPlay() { Super::BeginPlay(); }
 
@@ -42,7 +43,7 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 		VoxelNetServer_ServerListener.Reset();
 		UE_LOG(LogTemp, Warning, TEXT("VoxelNet server has stopped."));
 	}
-	else if (!bIsVoxelNetSingleplayer){
+	else if (!bIsVoxelNetSingleplayer) {
 		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet client..."));
 		if (VoxelNetClient_ClientThread)
 			VoxelNetClient_ClientThread->Kill(true);
@@ -149,7 +150,7 @@ void APagedWorld::Tick(float DeltaTime) {
 		SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
 #endif
 		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time 
-		dirtyRegions.Reset(); 
+		dirtyRegions.Reset();
 		if (!bIsVoxelNetServer) {
 			if (VoxelNetClient_VoxelClient.IsValid()) {
 				auto client = VoxelNetClient_VoxelClient.Get();
@@ -204,7 +205,8 @@ void APagedWorld::Tick(float DeltaTime) {
 
 				if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
-			else { // 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
+			else {
+				// 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
 				UE_LOG(LogTemp, Warning, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
 				//DrawDebugBox(this->GetWorld(), FVector(gen.region * 3200), FVector(1600), FColor::Emerald);
 			}
@@ -261,8 +263,8 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 		FString dbname = FPaths::ProjectSavedDir() + "World_" + DatabaseName;
 
 		leveldb::Status status = leveldb::DB::Open(options, std::string(TCHAR_TO_UTF8(*dbname)), &worldDB);
-		
-		UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %s"), *dbname, status.ok() ? TEXT("Success") :  TEXT("Failure"));
+
+		UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %s"), *dbname, status.ok() ? TEXT("Success") : TEXT("Failure"));
 		ensure(status.ok());
 
 		TArray<uint8> versionArchive;
@@ -285,7 +287,7 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 }
 
 void APagedWorld::PostInitializeComponents() {
-	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this),256*1024*1024,REGION_SIZE));
+	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
 	Super::PostInitializeComponents();
 }
 
@@ -319,11 +321,8 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 }
 
 void APagedWorld::QueueRegionRender(FIntVector pos) {
-	if(bRenderMarchingCubes){
-		(new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask();
-	} else {
-		(new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask();
-	}
+	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(); }
+	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(); }
 }
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
@@ -380,71 +379,99 @@ void APagedWorld::PagingComponentTick() {
 	if (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)
 		return;
 
-	TSet<FIntVector> regionsToLoad;
-	TSet<UTerrainPagingComponent*> toRemove;
+	TArray<TSet<FIntVector>> regionsToLoad; // lod levels
+	TSet<UTerrainPagingComponent*> PagingComponentsPendingRemoval;
+
+	regionsToLoad.AddZeroed(2); // lod levels
 
 	for (auto& pager : pagingComponents) {
-		if (!IsValid(pager)) { toRemove.Add(pager); } // fixed concurrent modification 8/24/19
+		if (!IsValid(pager)) { PagingComponentsPendingRemoval.Add(pager); } // fixed concurrent modification 8/24/19
 		else {
 			auto previousSubscribedRegions = pager->subscribedRegions;
 			pager->subscribedRegions.Reset();
 
-			int radius = pager->viewDistance;
-			FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
+			for (int i = 0; i < pager->LODLevels.Num(); i++) {
+				int radius = pager->LODLevels[i].Radius;
+				
+				FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
 
-			for (int z = -radius; z <= radius; z++) {// top down makes it feel faster
-				for (int y = -radius; y <= radius; y++) {
-					for (int x = -radius; x <= radius; x++) {
-						FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z);
-						pager->subscribedRegions.Emplace(surrounding);
-						regionsToLoad.Emplace(surrounding);
-					}
-				}
-			}
-			if (bIsVoxelNetServer) {
-				auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
-
-				TArray<TArray<uint8>> packets;
-				for (auto& uploadRegion : toUpload) {
-					if (VoxelNetServer_regionPackets.Contains(uploadRegion))
-						packets.Add(VoxelNetServer_regionPackets.FindRef(uploadRegion));
-						// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
-					else {
-						pager->waitingForPackets.Add(uploadRegion);
-					}
-				}
-
-				if (packets.Num() > 0) {
-					auto pagingPawn = Cast<APawn>(pager->GetOwner());
-					if (pagingPawn != nullptr) {
-						auto controller = Cast<APlayerController>(pagingPawn->GetController());
-						if (controller != nullptr) {
-							if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
-								auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
-								server->Get()->UploadRegions(packets);
-							}
-							else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
+				for (int z = -radius; z <= radius; z++) {
+					// top down makes it feel faster
+					for (int y = -radius; y <= radius; y++) {
+						for (int x = -radius; x <= radius; x++) {
+							FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z);
+							pager->subscribedRegions.Emplace(surrounding);
+							regionsToLoad[i].Emplace(surrounding);
 						}
-						else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
 					}
-					else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
+				}
+				
+				if (bIsVoxelNetServer) {
+					auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
+
+					TArray<TArray<uint8>> packets;
+					for (auto& uploadRegion : toUpload) {
+						if (VoxelNetServer_regionPackets.Contains(uploadRegion))
+							packets.Add(VoxelNetServer_regionPackets.FindRef(uploadRegion));
+							// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
+						else { pager->waitingForPackets.Add(uploadRegion); }
+					}
+
+					if (packets.Num() > 0) {
+						auto pagingPawn = Cast<APawn>(pager->GetOwner());
+						if (pagingPawn != nullptr) {
+							auto controller = Cast<APlayerController>(pagingPawn->GetController());
+							if (controller != nullptr) {
+								if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
+									auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
+									server->Get()->UploadRegions(packets);
+								}
+								else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
+							}
+							else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
+						}
+						else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
+					}
 				}
 			}
 		}
 	}
 
-	for (auto& elem : toRemove) { pagingComponents.Remove(elem); }
-	toRemove.Reset();
+	for (auto& elem : PagingComponentsPendingRemoval) { pagingComponents.Remove(elem); }
+	PagingComponentsPendingRemoval.Reset();
 
-	UnloadRegionsExcept(regionsToLoad);
+	UpdateLoadedRegionsLOD(regionsToLoad);
 }
 
-void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
+void APagedWorld::UpdateLoadedRegionsLOD(TArray<TSet<FIntVector>> NewLoadedRegions) {
+	const TArray<FIntVector> currentRegionsArr;
+	const TSet<FIntVector> currentRegions(currentRegionsArr);
+	
+	TSet<FIntVector> tempNewLoadedRegions;
+	for(auto& elem:NewLoadedRegions) {
+		if(elem.Num() > 0)
+		tempNewLoadedRegions.Append(elem.Array());
+	}
+	
+	auto toUnload = currentRegions.Difference(tempNewLoadedRegions); // to unload
+	auto toLoad = tempNewLoadedRegions.Difference(currentRegions); // to load
+
+	for (auto& unload : toUnload) { regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1); }
+
+	for (auto& load : toLoad) {
+		if (!regions.Contains(load)) {
+			getRegionAt(load);
+			MarkRegionDirtyAndAdjacent(load);
+		}
+	}
+}
+
+void APagedWorld::UpdateLoadedRegions(TSet<FIntVector> NewLoadedRegions) {
 	const TArray<FIntVector> currentRegionsArr;
 	const TSet<FIntVector> currentRegions(currentRegionsArr);
 
-	auto toUnload = currentRegions.Difference(regionsToLoad); // to unload
-	auto toLoad = regionsToLoad.Difference(currentRegions); // to load
+	auto toUnload = currentRegions.Difference(NewLoadedRegions); // to unload
+	auto toLoad = NewLoadedRegions.Difference(currentRegions); // to load
 
 	for (auto& unload : toUnload) { regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1); }
 
@@ -547,7 +574,7 @@ void APagedWorld::SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::
 
 		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order?
 		// x + (y*REGION_SIZE)
-		
+
 		for (char x = 0; x < REGION_SIZE; x++) {
 			for (char y = 0; y < REGION_SIZE; y++) {
 				auto uVoxel = pChunk->getVoxel(x, y, w);

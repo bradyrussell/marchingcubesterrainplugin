@@ -60,8 +60,8 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 				                        output.section[Material].Colors, output.section[Material].Tangents);
 			}
 
-			auto Section = Data->BeginSectionUpdate(Material); // must be called every update
-			Section->Commit();
+			/*auto Section = */Data->BeginSectionUpdate(Material)->Commit(); // must be called every update
+			//Section->Commit();
 		}
 		else {
 			RuntimeMesh->ClearMeshSection(Material); // fixes not being able to remove last polys of a material from a region

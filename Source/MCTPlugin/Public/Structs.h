@@ -110,6 +110,16 @@ USTRUCT(BlueprintType)
 };
 
 USTRUCT(BlueprintType)
+	struct FVoxelLODLevel // 
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") uint8 Radius = 2;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") uint8 ReductionFactor = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") bool bEnableCollision = true;
+};
+
+USTRUCT(BlueprintType)
 	struct FPendingHandshake // 
 {
 	GENERATED_BODY()

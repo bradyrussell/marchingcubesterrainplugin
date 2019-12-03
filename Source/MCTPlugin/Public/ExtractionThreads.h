@@ -2,7 +2,8 @@
 #include "Blueprint/AIAsyncTaskBlueprintProxy.h"
 #include "PagedWorld.h"
 #include <PolyVox/CubicSurfaceExtractor.h>
-
+#include <PolyVox/VolumeResampler.h>
+#include <PolyVox/RawVolume.h>
 
 namespace ExtractionThreads {
 	////////////////////////////////////////////////////////////////////////
@@ -70,6 +71,10 @@ namespace ExtractionThreads {
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 			}
 			// end packet generation
+
+			// LOD goes here
+
+			// volume resampling LOD here
 			
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
 			world->VolumeMutex.Unlock();
@@ -201,8 +206,31 @@ namespace ExtractionThreads {
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 			}
 			// end packet generation
+
+			// LOD goes here
+			//if lod  divison factor > 0
+			int DivisionFactor = 8;
+			PolyVox::Mesh<PolyVox::CubicVertex<PolyVox::MaterialDensityPair88>> ExtractedMesh;
 			
-			auto ExtractedMesh = PolyVox::extractCubicMesh(world->VoxelVolume.Get(), ToExtract);
+			if(DivisionFactor > 1){
+				PolyVox::RawVolume<PolyVox::MaterialDensityPair88> LodVolume(PolyVox::Region(0,0,0,REGION_SIZE / DivisionFactor,REGION_SIZE / DivisionFactor,REGION_SIZE / DivisionFactor));
+				
+				PolyVox::VolumeResampler<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>,PolyVox::RawVolume<PolyVox::MaterialDensityPair88>> volumeResampler(world->VoxelVolume.Get(), ToExtract, &LodVolume, LodVolume.getEnclosingRegion());
+				volumeResampler.execute();
+
+				//todo can i instead multiply the verts by the lod divisor??
+				PolyVox::RawVolume<PolyVox::MaterialDensityPair88> ResizedVolume(PolyVox::Region(0,0,0,REGION_SIZE,REGION_SIZE,REGION_SIZE));
+
+				PolyVox::VolumeResampler<PolyVox::RawVolume<PolyVox::MaterialDensityPair88>,PolyVox::RawVolume<PolyVox::MaterialDensityPair88>> volumeResampler2(&LodVolume, LodVolume.getEnclosingRegion(), &ResizedVolume, ResizedVolume.getEnclosingRegion());
+				volumeResampler2.execute();
+				
+				// volume resampling LOD here
+				//ResizedVolume.setBorderValue(PolyVox::MaterialDensityPair88(1,255)); // hopefully reduces unneeded faces
+				ExtractedMesh = PolyVox::extractCubicMesh(&ResizedVolume, ResizedVolume.getEnclosingRegion());
+			} else {
+				ExtractedMesh = PolyVox::extractCubicMesh(world->VoxelVolume.Get(), ToExtract);
+			}
+			
 			world->VolumeMutex.Unlock();
 
 			auto decoded = PolyVox::decodeMesh(ExtractedMesh);

@@ -94,7 +94,8 @@ public:
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(FIntVector pos, int32 radius) const;
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PagingComponentTick();
-	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
+	void UpdateLoadedRegionsLOD(TArray<TSet<FIntVector>> NewLoadedRegions);
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void UpdateLoadedRegions(TSet<FIntVector> loadedRegions);
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;

@@ -15,7 +15,7 @@ public:
 	UTerrainPagingComponent();
 
 	//Radius in regions
-	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
+	UPROPERTY(Category = "Voxel LOD Levels", BlueprintReadWrite, EditAnywhere) TArray<FVoxelLODLevel> LODLevels;
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
 	TSet<FIntVector> subscribedRegions;
 	TSet<FIntVector> waitingForPackets;
