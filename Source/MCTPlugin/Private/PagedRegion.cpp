@@ -48,7 +48,6 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 		if (output.section[Material].Indices.Num() > 0) {// fixes dhd3d resource crash 
 			FRuntimeMeshDataPtr Data = RuntimeMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
 			Data->EnterSerializedMode();
-
 			if (!bSectionExists[Material]) {
 				Data->CreateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
 				                        output.section[Material].Colors, output.section[Material].Tangents, true, EUpdateFrequency::Frequent);

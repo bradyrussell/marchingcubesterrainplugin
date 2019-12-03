@@ -209,24 +209,30 @@ namespace ExtractionThreads {
 
 			// LOD goes here
 			//if lod  divison factor > 0
-			int DivisionFactor = 8;
+			int32 DivisionFactor = 8;
+
+			DivisionFactor = FMath::Max(DivisionFactor, 1);
+			
 			PolyVox::Mesh<PolyVox::CubicVertex<PolyVox::MaterialDensityPair88>> ExtractedMesh;
 			
 			if(DivisionFactor > 1){
-				PolyVox::RawVolume<PolyVox::MaterialDensityPair88> LodVolume(PolyVox::Region(0,0,0,REGION_SIZE / DivisionFactor,REGION_SIZE / DivisionFactor,REGION_SIZE / DivisionFactor));
+				PolyVox::RawVolume<PolyVox::MaterialDensityPair88> LodVolume(PolyVox::Region(0,0,0,(REGION_SIZE / DivisionFactor)-1,(REGION_SIZE / DivisionFactor)-1,(REGION_SIZE / DivisionFactor)-1));
 				
 				PolyVox::VolumeResampler<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>,PolyVox::RawVolume<PolyVox::MaterialDensityPair88>> volumeResampler(world->VoxelVolume.Get(), ToExtract, &LodVolume, LodVolume.getEnclosingRegion());
 				volumeResampler.execute();
 
+				// i really need to not render external faces
+				
 				//todo can i instead multiply the verts by the lod divisor??
-				PolyVox::RawVolume<PolyVox::MaterialDensityPair88> ResizedVolume(PolyVox::Region(0,0,0,REGION_SIZE,REGION_SIZE,REGION_SIZE));
+				//PolyVox::RawVolume<PolyVox::MaterialDensityPair88> ResizedVolume(PolyVox::Region(0,0,0,REGION_SIZE,REGION_SIZE,REGION_SIZE));
 
-				PolyVox::VolumeResampler<PolyVox::RawVolume<PolyVox::MaterialDensityPair88>,PolyVox::RawVolume<PolyVox::MaterialDensityPair88>> volumeResampler2(&LodVolume, LodVolume.getEnclosingRegion(), &ResizedVolume, ResizedVolume.getEnclosingRegion());
-				volumeResampler2.execute();
+				//PolyVox::VolumeResampler<PolyVox::RawVolume<PolyVox::MaterialDensityPair88>,PolyVox::RawVolume<PolyVox::MaterialDensityPair88>> volumeResampler2(&LodVolume, LodVolume.getEnclosingRegion(), &ResizedVolume, ResizedVolume.getEnclosingRegion());
+				//volumeResampler2.execute();
 				
 				// volume resampling LOD here
 				//ResizedVolume.setBorderValue(PolyVox::MaterialDensityPair88(1,255)); // hopefully reduces unneeded faces
-				ExtractedMesh = PolyVox::extractCubicMesh(&ResizedVolume, ResizedVolume.getEnclosingRegion());
+				//ExtractedMesh = PolyVox::extractCubicMesh(&ResizedVolume, ResizedVolume.getEnclosingRegion());
+				ExtractedMesh = PolyVox::extractCubicMesh(&LodVolume, LodVolume.getEnclosingRegion());
 			} else {
 				ExtractedMesh = PolyVox::extractCubicMesh(world->VoxelVolume.Get(), ToExtract);
 			}
@@ -255,23 +261,21 @@ namespace ExtractionThreads {
 					if (TriangleMaterial == (Material + 1)) {
 						// If it is of the same material, then we need to add the correct indices now
 						output.section[Material].Indices.Add(
-							output.section[Material].Vertices.Add(
-								(FPolyVoxVector(Vertex2.position) +
-									OffsetLocation) * VOXEL_SIZE));
+							output.section[Material].Vertices.Add((FPolyVoxVector(Vertex2.position) + OffsetLocation/DivisionFactor) * VOXEL_SIZE *DivisionFactor));
 
 						Index = decoded.getIndex(i + 1);
 						auto Vertex1 = decoded.getVertex(Index);
 						output.section[Material].Indices.Add(
 							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex1.position) +
-									OffsetLocation) * VOXEL_SIZE));
+									OffsetLocation/DivisionFactor) * VOXEL_SIZE *DivisionFactor));
 
 						Index = decoded.getIndex(i);
 						auto Vertex0 = decoded.getVertex(Index);
 						output.section[Material].Indices.Add(
 							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex0.position) +
-									OffsetLocation) * VOXEL_SIZE));
+									OffsetLocation/DivisionFactor) * VOXEL_SIZE *DivisionFactor));
 
 						// Calculate the tangents of our triangle
 						const FVector Edge01 = FPolyVoxVector(Vertex1.position - Vertex0.position);
