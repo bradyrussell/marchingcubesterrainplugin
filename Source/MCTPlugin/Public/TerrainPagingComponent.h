@@ -1,5 +1,3 @@
-// Copyright (c) 2016 Brandon Garvin
-
 #pragma once
 
 #include "PagedWorld.h"
@@ -16,22 +14,13 @@ public:
 	// Sets default values for this component's properties
 	UTerrainPagingComponent();
 
-	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere)
-	int32 viewDistance = 2;
-
-	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere)
-	APagedWorld* world;
-
-	//getCurrentRegion
+	//Radius in regions
+	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
+	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
 	TSet<FIntVector> subscribedRegions;
 	TSet<FIntVector> waitingForPackets;
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
-
 public:
-	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-
-
 };
