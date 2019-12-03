@@ -16,6 +16,9 @@ void UTerrainPagingComponent::BeginPlay() {
 		return;
 	}
 
+	LODLevels.Sort();
+	Algo::Reverse(LODLevels);
+	
 	world = Cast<APagedWorld>(worldActors[0]);
 	world->RegisterPagingComponent(this);
 }

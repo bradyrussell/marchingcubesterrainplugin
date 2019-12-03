@@ -181,10 +181,18 @@ void APagedWorld::Tick(float DeltaTime) {
 
 		VolumeMutex.Unlock();
 
+		if((PagingComponentTickTimer += DeltaTime) >= PagingComponentTickRate) {
+			PagingComponentTickTimer = 0.f;
+			PagingComponentTick();
+		}
+		
 		for (auto& region : dirtyClone) {
 			// if we render unloaded regions we get cascading world gen
-			if (regions.Contains(region) || (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)) // if it is not in regions it will get discarded
-				QueueRegionRender(region);
+			if (regions.Contains(region) || (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)){ // if it is not in regions it will get discarded
+				FVoxelLODLevel* lod = LocalRegionLODLevels.Find(region);
+				if(lod)QueueRegionRender(region, *lod);
+				
+			}
 		}
 
 #ifdef WORLD_TICK_TRACKING
@@ -320,9 +328,9 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	}
 }
 
-void APagedWorld::QueueRegionRender(FIntVector pos) {
+void APagedWorld::QueueRegionRender(FIntVector pos, FVoxelLODLevel LODLevel) {
 	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(); }
-	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(); }
+	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos, LODLevel))->StartBackgroundTask(); }
 }
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
@@ -379,10 +387,10 @@ void APagedWorld::PagingComponentTick() {
 	if (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)
 		return;
 
-	TArray<TSet<FIntVector>> regionsToLoad; // lod levels
+	TSet<FIntVector> regionsToLoad;
 	TSet<UTerrainPagingComponent*> PagingComponentsPendingRemoval;
 
-	regionsToLoad.AddZeroed(2); // lod levels
+	LocalRegionLODLevels.Reset();
 
 	for (auto& pager : pagingComponents) {
 		if (!IsValid(pager)) { PagingComponentsPendingRemoval.Add(pager); } // fixed concurrent modification 8/24/19
@@ -390,7 +398,7 @@ void APagedWorld::PagingComponentTick() {
 			auto previousSubscribedRegions = pager->subscribedRegions;
 			pager->subscribedRegions.Reset();
 
-			for (int i = 0; i < pager->LODLevels.Num(); i++) {
+			for (int i = 0; i < pager->LODLevels.Num(); i++) { // lod levels are sorted by radius
 				int radius = pager->LODLevels[i].Radius;
 				
 				FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
@@ -401,7 +409,8 @@ void APagedWorld::PagingComponentTick() {
 						for (int x = -radius; x <= radius; x++) {
 							FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z);
 							pager->subscribedRegions.Emplace(surrounding);
-							regionsToLoad[i].Emplace(surrounding);
+							regionsToLoad.Emplace(surrounding);
+							LocalRegionLODLevels.Emplace(surrounding, pager->LODLevels[i]);
 						}
 					}
 				}
@@ -440,10 +449,10 @@ void APagedWorld::PagingComponentTick() {
 	for (auto& elem : PagingComponentsPendingRemoval) { pagingComponents.Remove(elem); }
 	PagingComponentsPendingRemoval.Reset();
 
-	UpdateLoadedRegionsLOD(regionsToLoad);
+	UpdateLoadedRegions(regionsToLoad);
 }
 
-void APagedWorld::UpdateLoadedRegionsLOD(TArray<TSet<FIntVector>> NewLoadedRegions) {
+/*void APagedWorld::UpdateLoadedRegionsLOD(TArray<TSet<FIntVector>> NewLoadedRegions) {
 	const TArray<FIntVector> currentRegionsArr;
 	const TSet<FIntVector> currentRegions(currentRegionsArr);
 	
@@ -464,7 +473,7 @@ void APagedWorld::UpdateLoadedRegionsLOD(TArray<TSet<FIntVector>> NewLoadedRegio
 			MarkRegionDirtyAndAdjacent(load);
 		}
 	}
-}
+}*/
 
 void APagedWorld::UpdateLoadedRegions(TSet<FIntVector> NewLoadedRegions) {
 	const TArray<FIntVector> currentRegionsArr;

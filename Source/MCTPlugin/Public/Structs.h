@@ -56,6 +56,7 @@ USTRUCT(BlueprintType)
 {
 	GENERATED_BODY()
 	FIntVector region;
+	bool bHasCollision;
 	TArray<FExtractionTaskSection> section = TArray<FExtractionTaskSection>();
 };
 
@@ -117,6 +118,12 @@ USTRUCT(BlueprintType)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") uint8 Radius = 2;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") uint8 ReductionFactor = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") bool bEnableCollision = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel LOD Level") bool bUpsampleLOD = true;
+
+	FORCEINLINE bool operator<(const FVoxelLODLevel &Other) const
+	{
+		return Radius < Other.Radius;
+	}
 };
 
 USTRUCT(BlueprintType)

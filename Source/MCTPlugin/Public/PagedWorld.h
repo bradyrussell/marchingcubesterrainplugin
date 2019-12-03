@@ -100,15 +100,18 @@ public:
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
-
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) float PagingComponentTickRate = 1.0f;
+	float PagingComponentTickTimer = 0.0f;
+	
 	/* Rendering */
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) bool bRenderMarchingCubes = false;
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) TArray<UMaterialInterface*> TerrainMaterials;
-	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void QueueRegionRender(FIntVector pos);
+	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void QueueRegionRender(FIntVector pos, FVoxelLODLevel LODLevel);
 	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 	TSet<FIntVector> dirtyRegions;// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
-
+	TMap<FIntVector, FVoxelLODLevel> LocalRegionLODLevels;
+	
 	/* Networking */
 	UPROPERTY(Category = "Voxel World|Networking", BlueprintReadWrite, EditAnywhere) bool bIsVoxelNetServer = false;
 	UPROPERTY(Category = "Voxel World|Networking", BlueprintReadWrite, EditAnywhere) bool bIsVoxelNetSingleplayer = false;

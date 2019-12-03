@@ -44,13 +44,22 @@ void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	if (RuntimeMesh == nullptr) { UE_LOG(LogTemp, Error, TEXT("There is no mesh when trying to render parsed.")); }
 
+	if(bHasCollision != output.bHasCollision) { // reset all sections if collision state changes
+		bHasCollision = output.bHasCollision;
+		RuntimeMesh->ClearAllMeshSections();
+		for (int32 Material = 0; Material < MAX_MATERIALS; Material++) {
+			bSectionExists[Material] = false;
+		}
+	}
+	
 	for (int32 Material = 0; Material < output.section.Num(); Material++) {
 		if (output.section[Material].Indices.Num() > 0) {// fixes dhd3d resource crash 
 			FRuntimeMeshDataPtr Data = RuntimeMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
+			
 			Data->EnterSerializedMode();
 			if (!bSectionExists[Material]) {
 				Data->CreateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
-				                        output.section[Material].Colors, output.section[Material].Tangents, true, EUpdateFrequency::Frequent);
+				                        output.section[Material].Colors, output.section[Material].Tangents, output.bHasCollision, EUpdateFrequency::Frequent);
 				RuntimeMesh->SetMaterial(Material, World->TerrainMaterials[Material]); // as far as i can tell not necessary on updates
 				bSectionExists[Material] = true;
 			}

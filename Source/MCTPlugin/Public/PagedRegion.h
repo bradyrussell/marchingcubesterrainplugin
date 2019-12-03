@@ -32,6 +32,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
 	void RenderParsed(FExtractionTaskOutput output);
 
+	bool bHasCollision;
 private:
 	bool bSectionExists[MAX_MATERIALS];
 };
