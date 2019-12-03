@@ -491,9 +491,9 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
 		const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
-		// get savablewithregion actors in this region
+		/*// get savablewithregion actors in this region
 		TArray<AActor*> outActors;
-		UGameplayStatics::GetAllActorsWithInterface(this->world, UISavableWithRegion::StaticClass(), outActors);
+		UGameplayStatics::GetAllActorsWithInterface(this->world, UISavableWithRegion::StaticClass(), outActors); // this is happening outisde gamethread
 
 		for (auto& elem : outActors) {
 			// todo have savables register themselves 
@@ -503,7 +503,7 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 				// todo how to save these
 
 			}
-		}
+		}*/
 
 #ifndef DONT_SAVE
 		world->SaveChunkToDatabase(world->worldDB, pos, pChunk);

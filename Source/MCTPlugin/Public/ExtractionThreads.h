@@ -159,10 +159,8 @@ namespace ExtractionThreads {
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE-1, lower.Y + REGION_SIZE-1,
-			                                                 lower.Z + REGION_SIZE-1)); // not sure why cubic needs -1
+			                                                 lower.Z + REGION_SIZE-1)); // not sure why cubic needs -1, or perhaps its MC that needs +1 to cover gaps?
 
-
-			
 			world->VolumeMutex.Lock();
 
 			if(!world->VoxelVolume.IsValid()) return;
