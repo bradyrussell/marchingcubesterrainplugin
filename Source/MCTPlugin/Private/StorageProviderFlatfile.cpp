@@ -23,6 +23,7 @@ bool StorageProviderFlatfile::Open(std::string Database, bool bCreateIfNotFound)
 	if(FPaths::DirectoryExists(UTF8_TO_TCHAR(GetDatabasePath(Database).c_str()))) {
 		return true;
 	} else {
+		if(!bCreateIfNotFound) return false;
 		IPlatformFile& FileManager = FPlatformFileManager::Get().GetPlatformFile();
 		return FileManager.CreateDirectory(UTF8_TO_TCHAR(GetDatabasePath(Database).c_str()));
 	}
