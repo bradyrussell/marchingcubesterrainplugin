@@ -14,6 +14,7 @@
 #include "VoxelNetThreads.h"
 #include "Networking/Public/Common/TcpListener.h"
 #include "Structs.h"
+#include "StorageProviderBase.h"
 #include "PagedWorld.generated.h"
 
 //cleaned up
@@ -62,20 +63,10 @@ public:
 	UPROPERTY(Category = "Voxel World|Database", BlueprintReadOnly, VisibleAnywhere) FString DatabaseName;
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);
 	// save the actual voxel data to leveldb , stored under region coords X Y Z W where w 2kb is xy layers
-	static void SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
-	static bool ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
-	// save region-specific data to leveldb, for instance entities in the region or special local properties. 
-	// these are separated by indicies based on categories , ideally with decreasing order of relevance as they are ordered by index
-	static void SaveRegionalDataToDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive);
-	static bool LoadRegionalDataFromDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive);
-	//save map-wide data to leveldb. this is still map specific so universal properties should have their own db. because we prepend a 14 byte tag, the key can be anything including ""
-	static void SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
-	static bool LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive);
-	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void TempSaveTransformToGlobal(FString key, FTransform value);
-	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) FTransform TempLoadTransformToGlobal(FString key);
-	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void SaveStringToGlobal(FString s);
-	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) FString LoadStringFromGlobal();
-	leveldb::DB* worldDB;
+	static void SaveChunkToDatabase(StorageProviderBase* StorageProvider, FIntVector Pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
+	static bool ReadChunkFromDatabase(StorageProviderBase* StorageProvider, FIntVector Pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
+	//leveldb::DB* worldDB;
+	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
