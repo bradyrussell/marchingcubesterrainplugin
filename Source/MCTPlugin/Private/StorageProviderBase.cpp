@@ -3,7 +3,7 @@
 #include "BufferArchive.h"
 #include "Config.h"
 
-StorageProviderBase::StorageProviderBase() {
+StorageProviderBase::StorageProviderBase():KeyPrefix(""), KeySuffix("") {
 }
 
 StorageProviderBase::~StorageProviderBase() {
@@ -101,7 +101,7 @@ bool StorageProviderBase::GetGlobalData(std::string Key, TArray<uint8>& Bytes) {
 int StorageProviderBase::GetDatabaseFormat() {
 	std::string value;
 	const auto bExists = Get(DB_VERSION_TAG, value);
-	return bExists ? std::stoi(value) : -1;
+	return bExists && value!="" ? std::stoi(value) : -1;
 }
 
 bool StorageProviderBase::SetDatabaseFormat(int Format) {
@@ -125,6 +125,18 @@ void StorageProviderBase::ArchiveFromString(std::string Input, TArray<uint8>& Ar
 	Archive.AddZeroed(len);
 
 	for (int i = 0; i < len; i++) { Archive[i] = (unsigned char)Input[i]; }
+}
+
+void StorageProviderBase::SetKeyPrefix(std::string Prefix) {
+	KeyPrefix = Prefix;
+}
+
+void StorageProviderBase::SetKeySuffix(std::string Suffix) {
+	KeySuffix = Suffix;
+}
+
+std::string StorageProviderBase::MakeKey(std::string Key) const {
+	return KeyPrefix + Key + KeySuffix;
 }
 
 std::string StorageProviderBase::SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) {

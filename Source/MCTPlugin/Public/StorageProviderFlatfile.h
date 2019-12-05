@@ -10,14 +10,12 @@
 /**
  * 
  */
-class MCTPLUGIN_API StorageProviderLevelDB: public StorageProviderBase
+class MCTPLUGIN_API StorageProviderFlatfile: public StorageProviderBase
 {
 public:
-	StorageProviderLevelDB(bool bUseOptimizations);
-	virtual ~StorageProviderLevelDB();
-
-	leveldb::DB* db;
-	bool bUseOptimizations = true;
+	//WARNING: This is only for demonstration purposes. This will write a LOT (easily 100k+) of small files to your disk and is very slow.
+	StorageProviderFlatfile();
+	virtual ~StorageProviderFlatfile();
 	
 	/* StorageProvider Interface */
 	virtual bool Open(std::string Database, bool bCreateIfNotFound) override;
@@ -30,4 +28,5 @@ public:
 	virtual std::string GetDatabasePath(std::string Name) override;
 	/* End StorageProvider Interface */
 
+	virtual std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) override;
 };

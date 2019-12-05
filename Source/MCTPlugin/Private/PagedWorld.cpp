@@ -13,12 +13,13 @@
 #include "WorldGenThreads.h"
 #include "StorageProviderBase.h"
 #include "StorageProviderLevelDB.h"
+#include "StorageProviderFlatfile.h"
 
 #ifdef WORLD_TICK_TRACKING
-	DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
-	DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
-	DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
-	DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
 #endif
 
 APagedWorld::APagedWorld() {
@@ -26,7 +27,8 @@ APagedWorld::APagedWorld() {
 	bReplicates = true;
 }
 
-APagedWorld::~APagedWorld() {}
+APagedWorld::~APagedWorld() {
+}
 
 void APagedWorld::BeginPlay() { Super::BeginPlay(); }
 
@@ -44,7 +46,7 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 		VoxelNetServer_ServerListener.Reset();
 		UE_LOG(LogTemp, Warning, TEXT("VoxelNet server has stopped."));
 	}
-	else if (!bIsVoxelNetSingleplayer){
+	else if (!bIsVoxelNetSingleplayer) {
 		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet client..."));
 		if (VoxelNetClient_ClientThread)
 			VoxelNetClient_ClientThread->Kill(true);
@@ -151,7 +153,7 @@ void APagedWorld::Tick(float DeltaTime) {
 		SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
 #endif
 		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time 
-		dirtyRegions.Reset(); 
+		dirtyRegions.Reset();
 		if (!bIsVoxelNetServer) {
 			if (VoxelNetClient_VoxelClient.IsValid()) {
 				auto client = VoxelNetClient_VoxelClient.Get();
@@ -182,11 +184,11 @@ void APagedWorld::Tick(float DeltaTime) {
 
 		VolumeMutex.Unlock();
 
-		if((PagingComponentTickTimer += DeltaTime) >= PagingComponentTickRate) {
+		if ((PagingComponentTickTimer += DeltaTime) >= PagingComponentTickRate) {
 			PagingComponentTickTimer = 0.f;
 			PagingComponentTick();
 		}
-		
+
 		for (auto& region : dirtyClone) {
 			// if we render unloaded regions we get cascading world gen
 			if (regions.Contains(region) || (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)) // if it is not in regions it will get discarded
@@ -211,7 +213,8 @@ void APagedWorld::Tick(float DeltaTime) {
 
 				if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
-			else { // 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
+			else {
+				// 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
 				UE_LOG(LogTemp, Warning, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
 				//DrawDebugBox(this->GetWorld(), FVector(gen.region * 3200), FVector(1600), FColor::Emerald);
 			}
@@ -257,12 +260,21 @@ void APagedWorld::Tick(float DeltaTime) {
 
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		WorldStorageProvider = new StorageProviderLevelDB();
-		WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true, StorageOptimization::Speed);
+		WorldStorageProvider = new StorageProviderLevelDB(true);
+
+		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
+
+		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
+		       WorldStorageProvider->GetProviderName(), status ? TEXT("Success") : TEXT("Failure"));
+
 		auto db_version = WorldStorageProvider->GetDatabaseFormat();
+		if (db_version == -1) {
+			WorldStorageProvider->SetDatabaseFormat(DB_VERSION);
+			db_version = WorldStorageProvider->GetDatabaseFormat();
+		}
 
 		UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Compatible? %s."), *Name, db_version, db_version==DB_VERSION? TEXT("Yes") : TEXT("No"));
-		assert(db_version == DB_VERSION);
+		ensure(db_version == DB_VERSION);
 	}
 }
 
@@ -275,7 +287,7 @@ bool APagedWorld::ReadChunkFromDatabase(StorageProviderBase* StorageProvider, FI
 }
 
 void APagedWorld::PostInitializeComponents() {
-	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this),256*1024*1024,REGION_SIZE));
+	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
 	Super::PostInitializeComponents();
 }
 
@@ -309,11 +321,8 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 }
 
 void APagedWorld::QueueRegionRender(FIntVector pos) {
-	if(bRenderMarchingCubes){
-		(new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask();
-	} else {
-		(new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask();
-	}
+	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(); }
+	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(); }
 }
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
@@ -382,7 +391,8 @@ void APagedWorld::PagingComponentTick() {
 			int radius = pager->viewDistance;
 			FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
 
-			for (int z = -radius; z <= radius; z++) {// top down makes it feel faster
+			for (int z = -radius; z <= radius; z++) {
+				// top down makes it feel faster
 				for (int y = -radius; y <= radius; y++) {
 					for (int x = -radius; x <= radius; x++) {
 						FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z);
@@ -399,9 +409,7 @@ void APagedWorld::PagingComponentTick() {
 					if (VoxelNetServer_regionPackets.Contains(uploadRegion))
 						packets.Add(VoxelNetServer_regionPackets.FindRef(uploadRegion));
 						// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
-					else {
-						pager->waitingForPackets.Add(uploadRegion);
-					}
+					else { pager->waitingForPackets.Add(uploadRegion); }
 				}
 
 				if (packets.Num() > 0) {

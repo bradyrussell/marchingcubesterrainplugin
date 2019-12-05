@@ -3,42 +3,28 @@
 
 #include "StorageProviderLevelDB.h"
 #include "BufferArchive.h"
-#include "Config.h"
 #include "Paths.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/cache.h"
 
-StorageProviderLevelDB::StorageProviderLevelDB() {
+StorageProviderLevelDB::StorageProviderLevelDB(bool bUseOptimizations):bUseOptimizations(bUseOptimizations) {
 }
 
 StorageProviderLevelDB::~StorageProviderLevelDB() {
 }
 
-bool StorageProviderLevelDB::Open(std::string Database, bool bCreateIfNotFound, StorageOptimization Optimization) {
+bool StorageProviderLevelDB::Open(std::string Database, bool bCreateIfNotFound) {
 	leveldb::Options options;
 	options.create_if_missing = bCreateIfNotFound;
-
-	//todo remove debug
-	Optimization = StorageOptimization::Speed;
-
-	switch (Optimization) {
-		case None: { break; }
-		case Speed: {
+	
+	if(bUseOptimizations) {
 			//options.write_buffer_size = 120 * 1048576; // todo make configurable in BP?
 			options.block_cache = leveldb::NewLRUCache(8 * 1048576);
 			options.filter_policy = leveldb::NewBloomFilterPolicy(10);
-			break;
 		}
-		case Memory: { break; }
-		case Disk: { break; }
-		default: { break; }
-	}
 
-	FString dbname = FPaths::ProjectSavedDir() + "World_" + FString(UTF8_TO_TCHAR(Database.c_str()));
-	leveldb::Status status = leveldb::DB::Open(options, std::string(TCHAR_TO_UTF8(*dbname)), &db);
-
-	UE_LOG(LogTemp, Warning, TEXT("Database connection to %s: %s"), *dbname, status.ok() ? TEXT("Success") : TEXT("Failure"));
-	ensure(status.ok());
+	leveldb::Status status = leveldb::DB::Open(options, GetDatabasePath(Database), &db);
+	
 	return status.ok();
 }
 
@@ -48,11 +34,19 @@ bool StorageProviderLevelDB::Close() {
 }
 
 bool StorageProviderLevelDB::Put(std::string Key, std::string Value) {
-	const auto status = db->Put(leveldb::WriteOptions(), Key ,Value);
+	const auto status = db->Put(leveldb::WriteOptions(), MakeKey(Key),Value);
 	return status.ok();
 }
 
 bool StorageProviderLevelDB::Get(std::string Key, std::string& Value) {
-	const auto status = db->Get(leveldb::ReadOptions(), Key, &Value);
+	const auto status = db->Get(leveldb::ReadOptions(), MakeKey(Key), &Value);
 	return status.ok();
+}
+
+const char* StorageProviderLevelDB::GetProviderName() {
+	return "LevelDB";
+}
+
+std::string StorageProviderLevelDB::GetDatabasePath(std::string Name) {
+	return TCHAR_TO_UTF8(*(FPaths::ProjectSavedDir()+ FString("LDB_")))  + Name;
 }

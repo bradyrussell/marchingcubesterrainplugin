@@ -7,12 +7,12 @@
 #include <PolyVox/MaterialDensityPair.h>
 #include <PolyVox/PagedVolume.h>
 
-enum StorageOptimization {
+/*enum StorageOptimization {
 	None,
 	Speed,
 	Memory,
 	Disk
-};
+};*/ // todo remove in favor of Subclass specific ctors
 
 /**
  * 
@@ -23,14 +23,22 @@ public:
 	StorageProviderBase();
 	virtual ~StorageProviderBase();
 
+	std::string KeyPrefix, KeySuffix;
+	
 	/* StorageProvider Interface */
-	virtual bool Open(std::string Database, bool bCreateIfNotFound = true, StorageOptimization Optimization = StorageOptimization::None) = 0;
+	virtual bool Open(std::string Database, bool bCreateIfNotFound = true/*, StorageOptimization Optimization = StorageOptimization::None*/) = 0;
 	virtual bool Close() = 0;
 	
 	virtual bool Put(std::string Key, std::string Value) = 0;
 	virtual bool Get(std::string Key, std::string& Value) = 0;
+
+	virtual std::string GetDatabasePath(std::string Name) = 0;
+	virtual const char* GetProviderName() = 0;
 	/* End StorageProvider Interface */
 
+	// Optionally allowed to override because some StorageProviders have character restrictions e.g. flatfile
+	virtual std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W);
+	
 	bool PutBytes(std::string Key, TArray<uint8>& Bytes);
 	bool GetBytes(std::string Key, TArray<uint8>& Bytes);
 
@@ -48,5 +56,10 @@ public:
 
 	static std::string ArchiveToString(TArray<uint8>& Archive);
 	static void ArchiveFromString(std::string Input, TArray<uint8>& Archive);
-	static std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W);
+	void SetKeyPrefix(std::string Prefix);
+	void SetKeySuffix(std::string Suffix);
+
+protected:
+	std::string MakeKey(std::string Key) const;
+	
 };
