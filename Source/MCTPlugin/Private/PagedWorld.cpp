@@ -180,6 +180,11 @@ void APagedWorld::Tick(float DeltaTime) {
 
 		VolumeMutex.Unlock();
 
+		if((PagingComponentTickTimer += DeltaTime) >= PagingComponentTickRate) {
+			PagingComponentTickTimer = 0.f;
+			PagingComponentTick();
+		}
+		
 		for (auto& region : dirtyClone) {
 			// if we render unloaded regions we get cascading world gen
 			if (regions.Contains(region) || (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)) // if it is not in regions it will get discarded

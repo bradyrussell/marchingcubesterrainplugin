@@ -99,6 +99,8 @@ public:
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
+	float PagingComponentTickTimer = 0;
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadWrite, EditAnywhere) float PagingComponentTickRate = 1.f;
 
 	/* Rendering */
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) bool bRenderMarchingCubes = false;

@@ -1,8 +1,7 @@
 #pragma once
-#include "Blueprint/AIAsyncTaskBlueprintProxy.h"
+//#include "Blueprint/AIAsyncTaskBlueprintProxy.h"
 #include "PagedWorld.h"
 #include <PolyVox/CubicSurfaceExtractor.h>
-
 
 namespace ExtractionThreads {
 	////////////////////////////////////////////////////////////////////////
@@ -27,8 +26,6 @@ namespace ExtractionThreads {
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE,
 			                                                 lower.Z + REGION_SIZE));
-
-
 			
 			world->VolumeMutex.Lock();
 
