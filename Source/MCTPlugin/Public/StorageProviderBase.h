@@ -24,6 +24,7 @@ public:
 	virtual ~StorageProviderBase();
 
 	std::string KeyPrefix, KeySuffix;
+	bool bRegionsUseSingleKey = false;
 	
 	/* StorageProvider Interface */
 	virtual bool Open(std::string Database, bool bCreateIfNotFound = true/*, StorageOptimization Optimization = StorageOptimization::None*/) = 0;

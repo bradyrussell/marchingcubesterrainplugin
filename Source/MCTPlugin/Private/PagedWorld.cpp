@@ -260,8 +260,8 @@ void APagedWorld::Tick(float DeltaTime) {
 
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		WorldStorageProvider = new StorageProviderLevelDB(true);
-
+		//WorldStorageProvider = new StorageProviderLevelDB(true);
+		WorldStorageProvider = new StorageProviderFlatfile();
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
@@ -276,14 +276,6 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 		UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Compatible? %s."), *Name, db_version, db_version==DB_VERSION? TEXT("Yes") : TEXT("No"));
 		ensure(db_version == DB_VERSION);
 	}
-}
-
-void APagedWorld::SaveChunkToDatabase(StorageProviderBase* StorageProvider, FIntVector Pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
-	StorageProvider->PutRegion(Pos, pChunk);
-}
-
-bool APagedWorld::ReadChunkFromDatabase(StorageProviderBase* StorageProvider, FIntVector Pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
-	return StorageProvider->GetRegion(Pos, pChunk);
 }
 
 void APagedWorld::PostInitializeComponents() {
@@ -478,7 +470,7 @@ WorldPager::WorldPager(APagedWorld* World)
 void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
 		const auto pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
-		const auto bRegionExists = world->ReadChunkFromDatabase(world->WorldStorageProvider, pos, pChunk);
+		const auto bRegionExists = world->WorldStorageProvider->GetRegion(pos, pChunk);
 		if (!bRegionExists) { world->BeginWorldGeneration(pos); }
 	}
 	return;
@@ -504,7 +496,7 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 		}*/
 
 #ifndef DONT_SAVE
-		world->SaveChunkToDatabase(world->WorldStorageProvider, pos, pChunk);
+		world->WorldStorageProvider->PutRegion(pos, pChunk);
 #endif
 		//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
 	}

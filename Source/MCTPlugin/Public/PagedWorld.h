@@ -60,12 +60,7 @@ public:
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 
 	/* Database */
-	UPROPERTY(Category = "Voxel World|Database", BlueprintReadOnly, VisibleAnywhere) FString DatabaseName;
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);
-	// save the actual voxel data to leveldb , stored under region coords X Y Z W where w 2kb is xy layers
-	static void SaveChunkToDatabase(StorageProviderBase* StorageProvider, FIntVector Pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
-	static bool ReadChunkFromDatabase(StorageProviderBase* StorageProvider, FIntVector Pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk);
-	//leveldb::DB* worldDB;
 	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */

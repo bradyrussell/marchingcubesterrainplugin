@@ -3,7 +3,8 @@
 #include "BufferArchive.h"
 #include "Config.h"
 
-StorageProviderBase::StorageProviderBase():KeyPrefix(""), KeySuffix("") {
+StorageProviderBase::StorageProviderBase()
+	: KeyPrefix(""), KeySuffix("") {
 }
 
 StorageProviderBase::~StorageProviderBase() {
@@ -23,66 +24,123 @@ bool StorageProviderBase::GetBytes(std::string Key, TArray<uint8>& Bytes) {
 bool StorageProviderBase::PutRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData) {
 	// todo make batched write
 	//bool success = true;
-	for (char w = 0; w < REGION_SIZE; w++) {
-		// for each x,y layer
-		char byteBuf[2 * REGION_SIZE * REGION_SIZE]; // 2kb for 32^2, material and density 1 byte each
-
-		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order?
-		// x + (y*REGION_SIZE)
-		//but compression may be better in order like this
+	if (bRegionsUseSingleKey) {
+		char byteBuf[2 * REGION_SIZE * REGION_SIZE * REGION_SIZE]; // 65kb for 32^3, material and density 1 byte each
+		int n = 0;
+		//since we are saving big keys this order should optimize compression
 
 		for (char x = 0; x < REGION_SIZE; x++) {
 			for (char y = 0; y < REGION_SIZE; y++) {
-				auto uVoxel = RegionData->getVoxel(x, y, w);
+				for (char w = 0; w < REGION_SIZE; w++) {
+					auto uVoxel = RegionData->getVoxel(x, y, w);
 
-				char mat = uVoxel.getMaterial(); // unsigned -> signed conversion
-				char den = uVoxel.getDensity();
+					char mat = uVoxel.getMaterial(); // unsigned -> signed conversion
+					char den = uVoxel.getDensity();
 
-				byteBuf[n++] = mat;
-				byteBuf[n++] = den;
+					byteBuf[n] = mat;
+					byteBuf[n + (REGION_SIZE * REGION_SIZE * REGION_SIZE)] = den;
+					n++;
+				}
 			}
 		}
 
-		auto b = Put(SerializeLocationToString(Region.X, Region.Y, Region.Z, w), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE));
-		if(!b) return false;
+		return Put(SerializeLocationToString(Region.X, Region.Y, Region.Z, 0), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE * REGION_SIZE));;
 	}
-	return true;
+	else {
+		for (char w = 0; w < REGION_SIZE; w++) {
+			// for each x,y layer
+			char byteBuf[2 * REGION_SIZE * REGION_SIZE]; // 2kb for 32^2, material and density 1 byte each
+
+			int n = 0; // this could be better if we were to calculate it from xy so it is independent of order?
+			// x + (y*REGION_SIZE)
+			//but compression may be better in order like this
+
+			for (char x = 0; x < REGION_SIZE; x++) {
+				for (char y = 0; y < REGION_SIZE; y++) {
+					auto uVoxel = RegionData->getVoxel(x, y, w);
+
+					char mat = uVoxel.getMaterial(); // unsigned -> signed conversion
+					char den = uVoxel.getDensity();
+
+					byteBuf[n++] = mat;
+					byteBuf[n++] = den;
+				}
+			}
+
+			auto b = Put(SerializeLocationToString(Region.X, Region.Y, Region.Z, w), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE));
+			if (!b)
+				return false;
+		}
+		return true;
+	}
 }
 
 bool StorageProviderBase::GetRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData) {
 	bool containsNonZero = false;
 
-	for (char w = 0; w < REGION_SIZE; w++) {
-		std::string chunkData;
+	if (bRegionsUseSingleKey) {
+		//for (char w = 0; w < REGION_SIZE; w++) {
+			std::string chunkData;
 
-		auto status = Get(SerializeLocationToString(Region.X, Region.Y, Region.Z, w), chunkData);
-		//auto status = db->Get(leveldb::ReadOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, w), &chunkData);
+			auto status = Get(SerializeLocationToString(Region.X, Region.Y, Region.Z, 0), chunkData);
 
-		if (!status) {
-			if (w > 0)
-			UE_LOG(LogTemp, Warning, TEXT("Loading failed partway through %s region : failed at layer %d. Region data unrecoverable."), *Region.ToString(), w);
-			return false;
-		}
+			if (!status) {
+				return false;
+			}
 
-		int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
+			int n = 0;
 
 		for (char x = 0; x < REGION_SIZE; x++) {
 			for (char y = 0; y < REGION_SIZE; y++) {
-				unsigned char mat = chunkData[n++]; // signed - > unsigned conversion
-				unsigned char den = chunkData[n++];
+				for (char w = 0; w < REGION_SIZE; w++) {
+					unsigned char mat = chunkData[n]; // signed - > unsigned conversion
+					unsigned char den = chunkData[n + (REGION_SIZE * REGION_SIZE * REGION_SIZE)];
+					n++;
 
-				if (mat != 0)
-					containsNonZero = true;
-				RegionData->setVoxel(x, y, w, PolyVox::MaterialDensityPair88(mat, den));
+					if (mat != 0)
+						containsNonZero = true;
+					RegionData->setVoxel(x, y, w, PolyVox::MaterialDensityPair88(mat, den));
+				}
 			}
 		}
-	}
 #ifdef REGEN_NULL_REGIONS
 	return containsNonZero;
 #else REGEN_NULL_REGIONS
-	return true;
+		return true;
 #endif
+	}
+	else {
+		for (char w = 0; w < REGION_SIZE; w++) {
+			std::string chunkData;
 
+			auto status = Get(SerializeLocationToString(Region.X, Region.Y, Region.Z, w), chunkData);
+			//auto status = db->Get(leveldb::ReadOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, w), &chunkData);
+
+			if (!status) {
+				if (w > 0)
+				UE_LOG(LogTemp, Warning, TEXT("Loading failed partway through %s region : failed at layer %d. Region data unrecoverable."), *Region.ToString(), w);
+				return false;
+			}
+
+			int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
+
+			for (char x = 0; x < REGION_SIZE; x++) {
+				for (char y = 0; y < REGION_SIZE; y++) {
+					unsigned char mat = chunkData[n++]; // signed - > unsigned conversion
+					unsigned char den = chunkData[n++];
+
+					if (mat != 0)
+						containsNonZero = true;
+					RegionData->setVoxel(x, y, w, PolyVox::MaterialDensityPair88(mat, den));
+				}
+			}
+		}
+#ifdef REGEN_NULL_REGIONS
+	return containsNonZero;
+#else REGEN_NULL_REGIONS
+		return true;
+#endif
+	}
 }
 
 
@@ -101,7 +159,7 @@ bool StorageProviderBase::GetGlobalData(std::string Key, TArray<uint8>& Bytes) {
 int StorageProviderBase::GetDatabaseFormat() {
 	std::string value;
 	const auto bExists = Get(DB_VERSION_TAG, value);
-	return bExists && value!="" ? std::stoi(value) : -1;
+	return bExists && value != "" ? std::stoi(value) : -1;
 }
 
 bool StorageProviderBase::SetDatabaseFormat(int Format) {
@@ -127,17 +185,11 @@ void StorageProviderBase::ArchiveFromString(std::string Input, TArray<uint8>& Ar
 	for (int i = 0; i < len; i++) { Archive[i] = (unsigned char)Input[i]; }
 }
 
-void StorageProviderBase::SetKeyPrefix(std::string Prefix) {
-	KeyPrefix = Prefix;
-}
+void StorageProviderBase::SetKeyPrefix(std::string Prefix) { KeyPrefix = Prefix; }
 
-void StorageProviderBase::SetKeySuffix(std::string Suffix) {
-	KeySuffix = Suffix;
-}
+void StorageProviderBase::SetKeySuffix(std::string Suffix) { KeySuffix = Suffix; }
 
-std::string StorageProviderBase::MakeKey(std::string Key) const {
-	return KeyPrefix + Key + KeySuffix;
-}
+std::string StorageProviderBase::MakeKey(std::string Key) const { return KeyPrefix + Key + KeySuffix; }
 
 std::string StorageProviderBase::SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) {
 	FBufferArchive tempBuffer(true);

@@ -11,7 +11,7 @@
 #include "ArchiveLoadCompressedProxy.h"
 
 StorageProviderFlatfile::StorageProviderFlatfile() {
-	
+	bRegionsUseSingleKey = true;
 }
 
 StorageProviderFlatfile::~StorageProviderFlatfile() {

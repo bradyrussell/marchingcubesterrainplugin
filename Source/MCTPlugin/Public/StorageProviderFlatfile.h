@@ -13,7 +13,7 @@
 class MCTPLUGIN_API StorageProviderFlatfile: public StorageProviderBase
 {
 public:
-	//WARNING: This is only for demonstration purposes. This will write a LOT (easily 100k+) of small files to your disk and is very slow.
+	//WARNING: This is only for demonstration purposes. This will write a LOT (easily 100k+ for large view distances) of small files to your disk and is very slow.
 	StorageProviderFlatfile();
 	virtual ~StorageProviderFlatfile();
 	
