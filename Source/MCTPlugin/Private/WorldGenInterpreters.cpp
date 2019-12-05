@@ -152,17 +152,25 @@ EBiome WorldGen::Interpret_Biome(float _height, float temperatue, float moisture
 	return MOUNTAINS;
 }
 
+enum {
+	Block_Air,
+	Block_Grass,
+	Block_Dirt,
+	Block_Stone,
+	Block_Ore,
+};
+
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
 	int32 _height = noise[0]->GetNoise2D(x, y);
 	int32 randomness = noise[0]->GetNoise3D(x,y,_height);
 	float ore = noise[1]->GetNoise3D(x,y,z);
 
 	if(z < _height - (10+randomness)) {
-		if(ore <= .2) return PolyVox::MaterialDensityPair88(4, 255);
-		else return PolyVox::MaterialDensityPair88(3, 255);
+		if(ore <= .2) return PolyVox::MaterialDensityPair88(Block_Ore, 255);
+		else return PolyVox::MaterialDensityPair88(Block_Stone, 255);
 	}
-	if(z < _height - (2+randomness)) return PolyVox::MaterialDensityPair88(2, 255);
-	if(z < _height - randomness) return PolyVox::MaterialDensityPair88(1, 255);
-	return PolyVox::MaterialDensityPair88(0,255);
+	if(z < _height - (2+randomness)) return PolyVox::MaterialDensityPair88(Block_Dirt, 255);
+	if(z < _height - randomness/4) return PolyVox::MaterialDensityPair88(Block_Grass, 255);
+	return PolyVox::MaterialDensityPair88(Block_Air,255);
 
 }
