@@ -11,6 +11,7 @@
 #include "ISavableWithRegion.h"
 #include "ExtractionThreads.h"
 #include "WorldGenThreads.h"
+#include "StorageProviderBase.h"
 
 #ifdef WORLD_TICK_TRACKING
 	DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -517,33 +518,6 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 	}
 }
 
-std::string ArchiveToString(TArray<uint8>& archive) {
-	const auto out = std::string((char*)archive.GetData(), archive.Num());
-	return out;
-}
-
-void ArchiveFromString(std::string input, TArray<uint8>& archive) {
-	const int len = input.length();
-	if (len <= 0)
-		return;
-
-	if (archive.Num() > 0)
-		archive.Empty(len);
-	archive.AddZeroed(len);
-
-	for (int i = 0; i < len; i++) { archive[i] = (unsigned char)input[i]; }
-}
-
-std::string SerializeLocationString(int32_t X, int32_t Y, int32_t Z, uint8 W) {
-	FBufferArchive tempBuffer(true);
-	tempBuffer << X;
-	tempBuffer << Y;
-	tempBuffer << Z;
-	tempBuffer << W;
-
-	return ArchiveToString(tempBuffer);
-}
-
 void APagedWorld::SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	// todo make batched write
 	for (char w = 0; w < REGION_SIZE; w++) {
@@ -565,7 +539,7 @@ void APagedWorld::SaveChunkToDatabase(leveldb::DB* db, FIntVector pos, PolyVox::
 			}
 		}
 
-		db->Put(leveldb::WriteOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, w), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE));
+		db->Put(leveldb::WriteOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, w), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE));
 	}
 }
 
@@ -574,7 +548,8 @@ bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox
 
 	for (char w = 0; w < REGION_SIZE; w++) {
 		std::string chunkData;
-		auto status = db->Get(leveldb::ReadOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, w), &chunkData);
+		
+		auto status = db->Get(leveldb::ReadOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, w), &chunkData);
 
 		if (status.IsNotFound()) {
 			if (w > 0)
@@ -604,21 +579,21 @@ bool APagedWorld::ReadChunkFromDatabase(leveldb::DB* db, FIntVector pos, PolyVox
 }
 
 void APagedWorld::SaveRegionalDataToDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive) {
-	db->Put(leveldb::WriteOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, index + REGION_SIZE), ArchiveToString(archive));
+	db->Put(leveldb::WriteOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, index + REGION_SIZE), StorageProviderBase::ArchiveToString(archive));
 }
 
 bool APagedWorld::LoadRegionalDataFromDatabase(leveldb::DB* db, FIntVector pos, uint8 index, TArray<uint8>& archive) {
 	std::string data;
-	auto status = db->Get(leveldb::ReadOptions(), SerializeLocationString(pos.X, pos.Y, pos.Z, index + REGION_SIZE), &data);
+	auto status = db->Get(leveldb::ReadOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, index + REGION_SIZE), &data);
 
 	if (status.IsNotFound())
 		return false;
 
-	ArchiveFromString(data, archive);
+	StorageProviderBase::ArchiveFromString(data, archive);
 	return true;
 }
 
-void APagedWorld::SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive) { db->Put(leveldb::WriteOptions(), DB_GLOBAL_TAG + key, ArchiveToString(archive)); }
+void APagedWorld::SaveGlobalDataToDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive) { db->Put(leveldb::WriteOptions(), DB_GLOBAL_TAG + key, StorageProviderBase::ArchiveToString(archive)); }
 
 bool APagedWorld::LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, TArray<uint8>& archive) {
 	std::string data;
@@ -627,7 +602,7 @@ bool APagedWorld::LoadGlobalDataFromDatabase(leveldb::DB* db, std::string key, T
 	if (status.IsNotFound())
 		return false;
 
-	ArchiveFromString(data, archive);
+	StorageProviderBase::ArchiveFromString(data, archive);
 	return true;
 }
 
