@@ -61,6 +61,7 @@ public:
 
 	/* Database */
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);
+	
 	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */

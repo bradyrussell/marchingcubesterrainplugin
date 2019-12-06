@@ -29,7 +29,7 @@ bool StorageProviderLevelDB::Open(std::string Database, bool bCreateIfNotFound) 
 }
 
 bool StorageProviderLevelDB::Close() {
-	delete db;
+	if(db)  delete db;
 	return true;
 }
 

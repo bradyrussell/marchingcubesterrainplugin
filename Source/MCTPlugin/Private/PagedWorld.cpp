@@ -63,7 +63,9 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
 	VolumeMutex.Lock();
 	VoxelVolume.Reset();
-	WorldStorageProvider->Close();
+
+	if(bIsVoxelNetSingleplayer || bIsVoxelNetServer) WorldStorageProvider->Close();
+	
 	VolumeMutex.Unlock();
 
 	PostSaveWorld();
@@ -258,10 +260,9 @@ void APagedWorld::Tick(float DeltaTime) {
 #endif
 }
 
-void APagedWorld::ConnectToDatabase(FString Name) {
+void APagedWorld::ConnectToDatabase(FString Name)  {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		//WorldStorageProvider = new StorageProviderLevelDB(true);
-		WorldStorageProvider = new StorageProviderFlatfile();
+		WorldStorageProvider = new StorageProviderLevelDB(true);
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
@@ -381,7 +382,7 @@ void APagedWorld::PagingComponentTick() {
 			pager->subscribedRegions.Reset();
 
 			int radius = pager->viewDistance;
-			FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetOwner()->GetActorLocation()));
+			FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetPagingLocation()));
 
 			for (int z = -radius; z <= radius; z++) {
 				// top down makes it feel faster

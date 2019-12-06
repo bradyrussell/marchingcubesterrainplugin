@@ -6,6 +6,10 @@ UTerrainPagingComponent::UTerrainPagingComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+FVector UTerrainPagingComponent::GetPagingLocation() const {
+	return bUseOverrideLocation ? OverrideLocation : GetOwner()->GetActorLocation();
+}
+
 void UTerrainPagingComponent::BeginPlay() {
 	Super::BeginPlay();
 	TArray<AActor*> worldActors;
