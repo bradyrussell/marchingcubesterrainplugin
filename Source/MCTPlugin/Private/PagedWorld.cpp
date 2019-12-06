@@ -64,8 +64,9 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	VolumeMutex.Lock();
 	VoxelVolume.Reset();
 
-	if(bIsVoxelNetSingleplayer || bIsVoxelNetServer) WorldStorageProvider->Close();
-	
+	if (bIsVoxelNetSingleplayer || bIsVoxelNetServer)
+		WorldStorageProvider->Close();
+
 	VolumeMutex.Unlock();
 
 	PostSaveWorld();
@@ -124,9 +125,7 @@ void APagedWorld::Tick(float DeltaTime) {
 			voxelUpdateQueue.Dequeue(update);
 
 			try {
-				//lock
 				for (int32 x = 0; x < update.radius; x++) {
-					// todo evaluate performance
 					for (int32 y = 0; y < update.radius; y++) {
 						for (int32 z = 0; z < update.radius; z++) {
 							const int32 n = update.radius / 2;
@@ -178,8 +177,7 @@ void APagedWorld::Tick(float DeltaTime) {
 							}
 						}
 					}
-					const auto pos = FIntVector(data.x, data.y, data.z);
-					MarkRegionDirtyAndAdjacent(pos);
+					MarkRegionDirtyAndAdjacent(FIntVector(data.x, data.y, data.z));
 				}
 			}
 		}
@@ -217,22 +215,27 @@ void APagedWorld::Tick(float DeltaTime) {
 			}
 			else {
 				// 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
-				UE_LOG(LogTemp, Warning, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
-				//DrawDebugBox(this->GetWorld(), FVector(gen.region * 3200), FVector(1600), FColor::Emerald);
+				//UE_LOG(LogTemp, Warning, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
+				OnRegionError(gen.region);
 			}
 		}
 
 		if (bIsVoxelNetServer) {
-			if (VoxelNetServer_justCookedRegions.Num() > 0) {
 				for (auto& pager : pagingComponents) {
 					TArray<TArray<uint8>> packets;
+					TSet<FIntVector> hits;
 
-					for (auto& region : VoxelNetServer_justCookedRegions) {
-						if (pager->waitingForPackets.Contains(region) && VoxelNetServer_regionPackets.Contains(region)) {
-							packets.Add(VoxelNetServer_regionPackets.FindRef(region));
-							pager->waitingForPackets.Remove(region);
-						}
+					TArray<FIntVector> cachedPackets;
+					VoxelNetServer_regionPackets.GetKeys(cachedPackets);
+
+					TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);;
+
+					for (auto& waitingFor : pager->waitingForPackets.Intersect(cacheSet)) { // where waitingFor and the cache intersect send packets
+						packets.Add(VoxelNetServer_regionPackets.FindRef(waitingFor));
+						hits.Emplace(waitingFor);
 					}
+
+					for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
 
 					// send packets to the pager's owner
 					if (packets.Num() > 0) {
@@ -242,7 +245,7 @@ void APagedWorld::Tick(float DeltaTime) {
 							if (controller != nullptr) {
 								if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
 									auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
-									server->Get()->UploadRegions(packets);
+									server->Get()->UploadRegions(packets); /// This is where the vast majority of sends occur in my testing
 								}
 								else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
 							}
@@ -251,7 +254,6 @@ void APagedWorld::Tick(float DeltaTime) {
 						else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
 					}
 				}
-			}
 		}
 
 
@@ -260,9 +262,10 @@ void APagedWorld::Tick(float DeltaTime) {
 #endif
 }
 
-void APagedWorld::ConnectToDatabase(FString Name)  {
+void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		WorldStorageProvider = new StorageProviderLevelDB(true);
+		//WorldStorageProvider = new StorageProviderFlatfile();
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
@@ -335,10 +338,6 @@ void APagedWorld::PrefetchRegionsInRadius(FIntVector pos, int32 radius) const {
 	VoxelVolume.Get()->prefetch(reg);
 }
 
-bool APagedWorld::ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) {
-	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation, Radius, Material, Density, cause, bIsSpherical));
-	return true;
-}
 
 FIntVector APagedWorld::VoxelToRegionCoords(FIntVector VoxelCoords) {
 	const FVector tmp = FVector(VoxelCoords) / (float)REGION_SIZE;
@@ -348,6 +347,16 @@ FIntVector APagedWorld::VoxelToRegionCoords(FIntVector VoxelCoords) {
 FIntVector APagedWorld::WorldToVoxelCoords(FVector WorldCoords) { return FIntVector(WorldCoords / VOXEL_SIZE); }
 
 FVector APagedWorld::VoxelToWorldCoords(FIntVector VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
+
+bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) { return true; }
+
+void APagedWorld::Server_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) {
+	Multi_ModifyVoxel(VoxelLocation, Radius, Material, Density, cause, bIsSpherical);
+}
+
+void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) {
+	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation, Radius, Material, Density, cause, bIsSpherical));
+}
 
 void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
@@ -384,16 +393,16 @@ void APagedWorld::PagingComponentTick() {
 			int radius = pager->viewDistance;
 			FIntVector pos = VoxelToRegionCoords(WorldToVoxelCoords(pager->GetPagingLocation()));
 
-			for (int z = -radius; z <= radius; z++) {
-				// top down makes it feel faster
-				for (int y = -radius; y <= radius; y++) {
-					for (int x = -radius; x <= radius; x++) {
-						FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, -REGION_SIZE * z);
+			for (int z = radius - 1; z >= -radius; z--) {
+				for (int y = -radius; y < radius; y++) {
+					for (int x = -radius; x < radius; x++) {
+						FIntVector surrounding = pos + FIntVector(REGION_SIZE * x, REGION_SIZE * y, REGION_SIZE * z);
 						pager->subscribedRegions.Emplace(surrounding);
 						regionsToLoad.Emplace(surrounding);
 					}
 				}
 			}
+
 			if (bIsVoxelNetServer) {
 				auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
 
@@ -402,7 +411,9 @@ void APagedWorld::PagingComponentTick() {
 					if (VoxelNetServer_regionPackets.Contains(uploadRegion))
 						packets.Add(VoxelNetServer_regionPackets.FindRef(uploadRegion));
 						// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
-					else { pager->waitingForPackets.Add(uploadRegion); }
+					else {
+						pager->waitingForPackets.Add(uploadRegion);
+					}
 				}
 
 				if (packets.Num() > 0) {
