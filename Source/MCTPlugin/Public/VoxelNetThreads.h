@@ -97,7 +97,7 @@ namespace VoxelNetThreads {
 								opcodeBuffer << regions;
 
 								remainingRegionsToDownload += regions;
-								UE_LOG(LogTemp, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
+								//UE_LOG(LogTemp, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
 
 							}
 						}
@@ -112,7 +112,7 @@ namespace VoxelNetThreads {
 								copy << opcode;
 								copy << dataSize;
 
-							UE_LOG(LogTemp, Warning, TEXT("Client: Received region response with a compressed size of %d. "), dataSize);
+							//UE_LOG(LogTemp, Warning, TEXT("Client: Received region response with a compressed size of %d. "), dataSize);
 
 								uint32 availableSize = 0;
 
@@ -127,7 +127,7 @@ namespace VoxelNetThreads {
 
 								if (socket->Recv(opcodeBuffer.GetData() + 5, FMath::Min((int32)dataSize, BUFFER_SIZE), BytesRead)) {
 									remainingRegionsToDownload--;
-									UE_LOG(LogTemp, Warning, TEXT("Client: Finished reading compressed chunk received %d bytes out of %d. Remaining regions: %d"), BytesRead, dataSize, remainingRegionsToDownload);
+									//UE_LOG(LogTemp, Warning, TEXT("Client: Finished reading compressed chunk received %d bytes out of %d. Remaining regions: %d"), BytesRead, dataSize, remainingRegionsToDownload);
 
 									Packet::RegionData data;
 									Packet::ParseRegionResponse(opcodeBuffer, data);

@@ -73,7 +73,6 @@ public:
 
 	/* Saving */
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void ForceSaveWorld() ;
-	void VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PreSaveWorld();
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PostSaveWorld();
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
@@ -109,6 +108,7 @@ public:
 	/* Voxelnet Server */
 	UFUNCTION(Category = "Voxel World|Networking|Server", BlueprintCallable)bool VoxelNetServer_StartServer();
 	UFUNCTION(Category = "Voxel World|Networking|Server", BlueprintCallable) void RegisterPlayerWithCookie(APlayerController* player, int64 cookie);
+	bool VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets);
 	TMap<FIntVector, TArray<uint8>> VoxelNetServer_regionPackets;
 	TQueue<FPacketTaskOutput, EQueueMode::Mpsc> VoxelNetServer_packetQueue;
 	bool VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint);

@@ -235,25 +235,10 @@ void APagedWorld::Tick(float DeltaTime) {
 						hits.Emplace(waitingFor);
 					}
 
-					for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
-
 					// send packets to the pager's owner
-					VoxelNetServer_SendPacketsToPagingComponent(pager, packets);
-					/*if (packets.Num() > 0) {
-						auto pagingPawn = Cast<APawn>(pager->GetOwner());
-						if (pagingPawn != nullptr) {
-							auto controller = Cast<APlayerController>(pagingPawn->GetController());
-							if (controller != nullptr) {
-								if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
-									auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
-									server->Get()->UploadRegions(packets); /// This is where the vast majority of sends occur in my testing
-								}
-								else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
-							}
-							else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
-						}
-						else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
-					}*/
+					if(VoxelNetServer_SendPacketsToPagingComponent(pager, packets)){ // this is the typical send that most packets go thru
+						for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
+					}
 				}
 		}
 
@@ -378,7 +363,7 @@ void APagedWorld::ForceSaveWorld() {
 	PostSaveWorld();
 }
 
-void APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
+bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
 	if (packets.Num() > 0) {
 		auto pagingPawn = Cast<APawn>(pager->GetOwner());
 		if (pagingPawn != nullptr) {
@@ -386,14 +371,25 @@ void APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComp
 			if (controller != nullptr) {
 				if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
 					auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
-					server->Get()->UploadRegions(packets); 
+					server->Get()->UploadRegions(packets);
+					return true;
 				}
-				else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
+				else {
+					UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
+					return false;
+				}
 			}
-			else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
+			else {
+				UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller."));
+				return false;
+			}
 		}
-		else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn."));
+			return false;
+		}
 	}
+	return true;
 }
 
 void APagedWorld::PagingComponentTick() {
@@ -425,17 +421,17 @@ void APagedWorld::PagingComponentTick() {
 			if (bIsVoxelNetServer) {
 				auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
 
-				TArray<TArray<uint8>> packets;
+				//TArray<TArray<uint8>> packets; // since the vast majority of packets are delayed maybe we should just delay all of them to simplify
 				for (auto& uploadRegion : toUpload) {
-					if (VoxelNetServer_regionPackets.Contains(uploadRegion))
+					/*if (VoxelNetServer_regionPackets.Contains(uploadRegion))
 						packets.Add(VoxelNetServer_regionPackets.FindRef(uploadRegion));
 						// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
-					else {
+					else {*/
 						pager->waitingForPackets.Add(uploadRegion);
-					}
+					//}
 				}
 
-				VoxelNetServer_SendPacketsToPagingComponent(pager, packets);
+				//VoxelNetServer_SendPacketsToPagingComponent(pager, packets); // very rare theyre ready at this point, almost all get delayed
 			}
 		}
 	}
