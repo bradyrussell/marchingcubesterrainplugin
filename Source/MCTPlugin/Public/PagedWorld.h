@@ -46,13 +46,16 @@ protected:
 
 public:
 	void Tick(float DeltaTime) override;
-
+	//debug
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
+	
 	/* World */
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintCallable, BlueprintPure) FVector VoxelToWorldCoords(FIntVector VoxelCoords);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable, NetMulticast, Reliable) void Multi_ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable, Server, Unreliable, WithValidation) void Server_ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false);
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event") FVoxelWorldUpdate VoxelWorldUpdate_Event;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bUseAsyncCollision = true;
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;

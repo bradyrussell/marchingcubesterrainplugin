@@ -19,7 +19,6 @@ void UTerrainPagingComponent::BeginPlay() {
 		UE_LOG(LogTemp, Warning, TEXT("TerrainPagingComponent: Cannot find world actor."));
 		return;
 	}
-
 	world = Cast<APagedWorld>(worldActors[0]);
 	world->RegisterPagingComponent(this);
 }
