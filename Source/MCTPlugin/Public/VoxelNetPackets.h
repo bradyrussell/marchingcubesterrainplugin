@@ -5,7 +5,7 @@
 #include "ArchiveLoadCompressedProxy.h"
 #include "Config.h"
 
-#define SOCKET_DELAY .01
+#define SOCKET_DELAY .001
 #define SOCKET_TIMEOUT 10.0
 #define PROTOCOL_VERSION 0x2
 

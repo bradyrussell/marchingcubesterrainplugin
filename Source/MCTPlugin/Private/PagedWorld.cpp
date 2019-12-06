@@ -238,7 +238,8 @@ void APagedWorld::Tick(float DeltaTime) {
 					for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
 
 					// send packets to the pager's owner
-					if (packets.Num() > 0) {
+					VoxelNetServer_SendPacketsToPagingComponent(pager, packets);
+					/*if (packets.Num() > 0) {
 						auto pagingPawn = Cast<APawn>(pager->GetOwner());
 						if (pagingPawn != nullptr) {
 							auto controller = Cast<APlayerController>(pagingPawn->GetController());
@@ -252,7 +253,7 @@ void APagedWorld::Tick(float DeltaTime) {
 							else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
 						}
 						else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
-					}
+					}*/
 				}
 		}
 
@@ -377,6 +378,24 @@ void APagedWorld::ForceSaveWorld() {
 	PostSaveWorld();
 }
 
+void APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
+	if (packets.Num() > 0) {
+		auto pagingPawn = Cast<APawn>(pager->GetOwner());
+		if (pagingPawn != nullptr) {
+			auto controller = Cast<APlayerController>(pagingPawn->GetController());
+			if (controller != nullptr) {
+				if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
+					auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
+					server->Get()->UploadRegions(packets); 
+				}
+				else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
+			}
+			else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
+		}
+		else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
+	}
+}
+
 void APagedWorld::PagingComponentTick() {
 	if (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)
 		return;
@@ -416,21 +435,7 @@ void APagedWorld::PagingComponentTick() {
 					}
 				}
 
-				if (packets.Num() > 0) {
-					auto pagingPawn = Cast<APawn>(pager->GetOwner());
-					if (pagingPawn != nullptr) {
-						auto controller = Cast<APlayerController>(pagingPawn->GetController());
-						if (controller != nullptr) {
-							if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
-								auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
-								server->Get()->UploadRegions(packets);
-							}
-							else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller.")); }
-						}
-						else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller.")); }
-					}
-					else { UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn.")); }
-				}
+				VoxelNetServer_SendPacketsToPagingComponent(pager, packets);
 			}
 		}
 	}
@@ -442,13 +447,18 @@ void APagedWorld::PagingComponentTick() {
 }
 
 void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
-	const TArray<FIntVector> currentRegionsArr;
+	TArray<FIntVector> currentRegionsArr;
+	regions.GetKeys(currentRegionsArr);
+	
 	const TSet<FIntVector> currentRegions(currentRegionsArr);
-
+	
 	auto toUnload = currentRegions.Difference(regionsToLoad); // to unload
 	auto toLoad = regionsToLoad.Difference(currentRegions); // to load
 
-	for (auto& unload : toUnload) { regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1); }
+	for (auto& unload : toUnload) {
+		regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1);
+		UE_LOG(LogTemp, Warning, TEXT("Paging out region %s"), *unload.ToString());
+	}
 
 	for (auto& load : toLoad) {
 		if (!regions.Contains(load)) {

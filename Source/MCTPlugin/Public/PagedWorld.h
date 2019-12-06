@@ -73,6 +73,7 @@ public:
 
 	/* Saving */
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void ForceSaveWorld() ;
+	void VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PreSaveWorld();
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PostSaveWorld();
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
