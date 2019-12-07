@@ -419,19 +419,14 @@ void APagedWorld::PagingComponentTick() {
 			}
 
 			if (bIsVoxelNetServer) {
-				auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
+				/*auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
 
-				//TArray<TArray<uint8>> packets; // since the vast majority of packets are delayed maybe we should just delay all of them to simplify
+				// since the vast majority of packets are delayed maybe we should just delay all of them to simplify
 				for (auto& uploadRegion : toUpload) {
-					/*if (VoxelNetServer_regionPackets.Contains(uploadRegion))
-						packets.Add(VoxelNetServer_regionPackets.FindRef(uploadRegion));
-						// this is before the regions even get loaded on the server. i need to, in extraction results, check if anyone is subbed
-					else {*/
 						pager->waitingForPackets.Add(uploadRegion);
-					//}
-				}
+				}*/
 
-				//VoxelNetServer_SendPacketsToPagingComponent(pager, packets); // very rare theyre ready at this point, almost all get delayed
+				pager->waitingForPackets.Append(pager->subscribedRegions.Difference(previousSubscribedRegions));
 			}
 		}
 	}
