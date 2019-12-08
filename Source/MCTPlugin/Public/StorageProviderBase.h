@@ -54,6 +54,7 @@ public:
 	
 	int GetDatabaseFormat();
 	bool SetDatabaseFormat(int Format);
+	virtual bool VerifyDatabaseFormat(int Format);
 
 	static std::string ArchiveToString(TArray<uint8>& Archive);
 	static void ArchiveFromString(std::string Input, TArray<uint8>& Archive);

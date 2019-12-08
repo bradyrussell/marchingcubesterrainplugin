@@ -14,6 +14,8 @@
 #include "StorageProviderBase.h"
 #include "StorageProviderLevelDB.h"
 #include "StorageProviderFlatfile.h"
+#include "StorageProviderNull.h"
+#include "StorageProviderTMap.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -254,21 +256,18 @@ void APagedWorld::Tick(float DeltaTime) {
 
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		WorldStorageProvider = new StorageProviderLevelDB(true);
+		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
+		WorldStorageProvider = new StorageProviderTMap();
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
 		       WorldStorageProvider->GetProviderName(), status ? TEXT("Success") : TEXT("Failure"));
 
-		auto db_version = WorldStorageProvider->GetDatabaseFormat();
-		if (db_version == -1) {
-			WorldStorageProvider->SetDatabaseFormat(DB_VERSION);
-			db_version = WorldStorageProvider->GetDatabaseFormat();
-		}
+		auto compatible = WorldStorageProvider->VerifyDatabaseFormat(DB_VERSION);
 
-		UE_LOG(LogTemp, Warning, TEXT("Database version for %s: %d. Compatible? %s."), *Name, db_version, db_version==DB_VERSION? TEXT("Yes") : TEXT("No"));
-		ensure(db_version == DB_VERSION);
+		UE_LOG(LogTemp, Warning, TEXT("Database version for %s: Compatible? %s."), *Name, compatible? TEXT("Yes") : TEXT("No"));
+		ensure(compatible);
 	}
 }
 

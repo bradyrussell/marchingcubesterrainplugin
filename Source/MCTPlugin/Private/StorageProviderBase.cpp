@@ -168,6 +168,15 @@ bool StorageProviderBase::SetDatabaseFormat(int Format) {
 	return Put(DB_VERSION_TAG, buf);
 }
 
+bool StorageProviderBase::VerifyDatabaseFormat(int Format) {
+		auto db_version = GetDatabaseFormat();
+		if (db_version == -1) { 
+			SetDatabaseFormat(DB_VERSION);
+			db_version = GetDatabaseFormat();// this is intentional, basically a sort of check we can read/write from the db. override if you dont want, see StorageProviderNull 
+		}
+	return  db_version == Format;
+}
+
 std::string StorageProviderBase::ArchiveToString(TArray<uint8>& Archive) {
 	const auto out = std::string((char*)Archive.GetData(), Archive.Num());
 	return out;
