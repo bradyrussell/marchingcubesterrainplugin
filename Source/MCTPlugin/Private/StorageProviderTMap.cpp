@@ -10,7 +10,7 @@
 #include "ArchiveSaveCompressedProxy.h"
 #include "ArchiveLoadCompressedProxy.h"
 
-StorageProviderTMap::StorageProviderTMap() {
+StorageProviderTMap::StorageProviderTMap(bool bShouldSaveToFile):bShouldSaveToFile(bShouldSaveToFile) {
 
 }
 
@@ -18,10 +18,34 @@ StorageProviderTMap::~StorageProviderTMap() {
 }
 
 bool StorageProviderTMap::Open(std::string Database, bool bCreateIfNotFound) {
-	return bCreateIfNotFound;
+	//return bCreateIfNotFound;
+	DBName = Database;
+	TArray<uint8> data;
+	
+	auto exists = FFileHelper::LoadFileToArray(data, UTF8_TO_TCHAR(GetDatabasePath(DBName).c_str()));
+
+	if(!exists) return bCreateIfNotFound;
+
+	FArchiveLoadCompressedProxy decompress(data, NAME_Zlib);
+	decompress << DatabaseMap;
+
+	return true;
 }
 
 bool StorageProviderTMap::Close() {
+	if(bShouldSaveToFile) {
+		TArray<uint8> data;
+		FArchiveSaveCompressedProxy compress(data, NAME_Zlib, ECompressionFlags::COMPRESS_BiasMemory);
+
+		compress << DatabaseMap;
+
+		compress.Flush();
+		compress.Close();
+
+		FFileHelper::SaveArrayToFile(data, UTF8_TO_TCHAR(GetDatabasePath(DBName).c_str()));
+	}
+	
+	DatabaseMap.Empty();
 	return true;
 }
 
@@ -46,7 +70,7 @@ const char* StorageProviderTMap::GetProviderName() {
 }
 
 std::string StorageProviderTMap::GetDatabasePath(std::string Name) {
-	return Name;
+	return TCHAR_TO_UTF8(*(FPaths::ProjectSavedDir()))  + Name + ".tmap";
 }
 
 

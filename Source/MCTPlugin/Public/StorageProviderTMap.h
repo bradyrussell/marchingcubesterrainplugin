@@ -13,10 +13,13 @@
 class MCTPLUGIN_API StorageProviderTMap: public StorageProviderBase
 {
 public:
-	StorageProviderTMap();
+	StorageProviderTMap(bool bShouldSaveToFile);
 	virtual ~StorageProviderTMap();
 
 	TMap<FString,TArray<uint8>> DatabaseMap;
+	std::string DBName;
+
+	bool bShouldSaveToFile = false;
 	
 	/* StorageProvider Interface */
 	virtual bool Open(std::string Database, bool bCreateIfNotFound) override;

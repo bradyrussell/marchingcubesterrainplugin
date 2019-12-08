@@ -256,9 +256,10 @@ void APagedWorld::Tick(float DeltaTime) {
 
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		//WorldStorageProvider = new StorageProviderLevelDB(true);
+		WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
-		WorldStorageProvider = new StorageProviderTMap();
+		//WorldStorageProvider = new StorageProviderTMap(true);
+		
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),

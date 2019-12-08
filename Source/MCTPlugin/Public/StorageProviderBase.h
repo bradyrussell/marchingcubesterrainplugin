@@ -27,7 +27,7 @@ public:
 	bool bRegionsUseSingleKey = false;
 	
 	/* StorageProvider Interface */
-	virtual bool Open(std::string Database, bool bCreateIfNotFound = true/*, StorageOptimization Optimization = StorageOptimization::None*/) = 0;
+	virtual bool Open(std::string Database, bool bCreateIfNotFound = true) = 0;
 	virtual bool Close() = 0;
 	
 	virtual bool Put(std::string Key, std::string Value) = 0;
