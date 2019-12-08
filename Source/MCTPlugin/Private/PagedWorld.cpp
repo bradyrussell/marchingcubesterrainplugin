@@ -238,7 +238,11 @@ void APagedWorld::Tick(float DeltaTime) {
 					// send packets to the pager's owner
 					if(VoxelNetServer_SendPacketsToPagingComponent(pager, packets)){ // this is the typical send that most packets go thru
 						for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
+						pager->bIsConnectedToVoxelnet = true;
+					} else {
+						pager->bIsConnectedToVoxelnet = false;
 					}
+					
 				}
 		}
 
@@ -529,7 +533,13 @@ bool APagedWorld::VoxelNetServer_StartServer() {
 
 bool APagedWorld::VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint) {
 	if (bIsVoxelNetServer) {
-		int64 cookie = FMath::RandRange(INT64_MIN,INT64_MAX);
+		
+		int64 cookie = FMath::RandRange(-255, 255); // min and max 64 dont work at all, weird stuff going on here
+		while(cookie == FMath::RandRange(-255, 255)) {  // this happens on early connects
+			cookie = FMath::RandRange(-255, 255); 
+			UE_LOG(LogTemp, Warning, TEXT("Failed to generate random cookie for %s, retrying..."), *endpoint.ToString());
+			FPlatformProcess::Sleep(1);
+		}
 
 		UE_LOG(LogTemp, Warning, TEXT("Connection received from %s, starting thread..."), *endpoint.ToString());
 		auto server = MakeShareable(new VoxelNetThreads::VoxelNetServer(cookie, socket, endpoint));

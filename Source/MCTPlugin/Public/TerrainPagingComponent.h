@@ -18,8 +18,10 @@ public:
 	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
 	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) bool bUseOverrideLocation;
 	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) FVector OverrideLocation;
+	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) bool bIsConnectedToVoxelnet = false;
 	
 	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
+	
 	TSet<FIntVector> subscribedRegions;
 	TSet<FIntVector> waitingForPackets;
 
