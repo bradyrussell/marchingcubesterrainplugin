@@ -202,7 +202,7 @@ void APagedWorld::Tick(float DeltaTime) {
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldClearExtractionQueue);
 #endif
-		TArray<FIntVector> VoxelNetServer_justCookedRegions;
+		//TArray<FIntVector> VoxelNetServer_justCookedRegions;
 
 		while (!extractionQueue.IsEmpty()) {
 			FExtractionTaskOutput gen;
@@ -213,11 +213,9 @@ void APagedWorld::Tick(float DeltaTime) {
 				reg->RenderParsed(gen);
 				reg->UpdateNavigation();
 
-				if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
+				//if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
 			else {
-				// 12/2 does this still happen? do i need to peek and not deque these cuz theyre pending repl?
-				//UE_LOG(LogTemp, Warning, TEXT("%d Tried to render null region %s."), bIsVoxelNetServer, *gen.region.ToString());
 				OnRegionError(gen.region);
 			}
 		}
@@ -256,16 +254,17 @@ void APagedWorld::Tick(float DeltaTime) {
 
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		WorldStorageProvider = new StorageProviderLevelDB(true);
+		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
 		//WorldStorageProvider = new StorageProviderTMap(true);
+		WorldStorageProvider = new StorageProviderNull();
 		
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
 		       WorldStorageProvider->GetProviderName(), status ? TEXT("Success") : TEXT("Failure"));
 
-		auto compatible = WorldStorageProvider->VerifyDatabaseFormat(DB_VERSION);
+		const auto compatible = WorldStorageProvider->VerifyDatabaseFormat(DB_VERSION);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database version for %s: Compatible? %s."), *Name, compatible? TEXT("Yes") : TEXT("No"));
 		ensure(compatible);
@@ -338,14 +337,14 @@ FIntVector APagedWorld::WorldToVoxelCoords(FVector WorldCoords) { return FIntVec
 
 FVector APagedWorld::VoxelToWorldCoords(FIntVector VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
 
-bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) { return true; }
+bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) { return true; }
 
-void APagedWorld::Server_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) {
-	Multi_ModifyVoxel(VoxelLocation, Radius, Material, Density, cause, bIsSpherical);
+void APagedWorld::Server_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
+	Multi_ModifyVoxel(VoxelLocation, Radius, Material, Density, cause, bIsSpherical, bShouldDrop);
 }
 
-void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical) {
-	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation, Radius, Material, Density, cause, bIsSpherical));
+void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
+	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation, Radius, Material, Density, cause, bIsSpherical, bShouldDrop));
 }
 
 void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
@@ -379,7 +378,8 @@ bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComp
 					return true;
 				}
 				else {
-					UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
+					// this gets spammy
+					//UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
 					return false;
 				}
 			}

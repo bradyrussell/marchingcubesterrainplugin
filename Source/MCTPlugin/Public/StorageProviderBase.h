@@ -7,13 +7,6 @@
 #include <PolyVox/MaterialDensityPair.h>
 #include <PolyVox/PagedVolume.h>
 
-/*enum StorageOptimization {
-	None,
-	Speed,
-	Memory,
-	Disk
-};*/ // todo remove in favor of Subclass specific ctors
-
 /**
  * 
  */
@@ -54,6 +47,8 @@ public:
 	
 	int GetDatabaseFormat();
 	bool SetDatabaseFormat(int Format);
+
+	// Optionally allowed to override because some StorageProviders dont store a version , see StorageProviderNull
 	virtual bool VerifyDatabaseFormat(int Format);
 
 	static std::string ArchiveToString(TArray<uint8>& Archive);
