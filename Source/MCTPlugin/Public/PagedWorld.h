@@ -22,7 +22,7 @@
 class APagedRegion;
 class UTerrainPagingComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial, const bool, bShouldDrop);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVoxelNetHandshake,const int64, cookie);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPreSaveWorld,const bool, isQuitting);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPostSaveWorld,const bool, isQuitting);
@@ -42,6 +42,10 @@ public:
 protected:
 	void BeginPlay() override;
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	void VoxelUpdatesTick();
+	void WorldNewRegionsTick();
+	void VoxelNetClientTick();
+	void VoxelNetServerTick();
 	void PostInitializeComponents() override;
 
 public:

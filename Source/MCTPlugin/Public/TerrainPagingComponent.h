@@ -15,12 +15,21 @@ public:
 	UTerrainPagingComponent();
 
 	//Radius in regions
-	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
-	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) bool bUseOverrideLocation;
-	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) FVector OverrideLocation;
-	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere) bool bIsConnectedToVoxelnet = false;
+	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
+	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bUseOverrideLocation;
+	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) FVector OverrideLocation;
+	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bIsConnectedToVoxelnet = false;
+	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bFreezePawn = false;
+
 	
-	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
+	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
+
+	UFUNCTION(Category = "Paging Component", BlueprintPure) bool ShouldFreezePawn() const;
+	UFUNCTION(Category = "Paging Component", BlueprintCallable) bool PrepareToTeleport(const FVector Destination);
+
+	void OnSentRegionPacket(int Num);
+	int32 ExpectedRegions = 0;
+	bool bIsPreparingTeleport = false;
 	
 	TSet<FIntVector> subscribedRegions;
 	TSet<FIntVector> waitingForPackets;

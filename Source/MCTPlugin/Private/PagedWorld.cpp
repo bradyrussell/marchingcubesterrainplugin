@@ -79,42 +79,110 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	UE_LOG(LogTemp, Warning, TEXT("World database saved in %f ms."), afterSave.GetTotalMicroseconds()*0.001);
 }
 
+void APagedWorld::VoxelUpdatesTick() {
+	while (!voxelUpdateQueue.IsEmpty()) {
+		FVoxelUpdate update;
+		voxelUpdateQueue.Dequeue(update);
+
+		try {
+			for (int32 x = 0; x < update.radius; x++) {
+				for (int32 y = 0; y < update.radius; y++) {
+					for (int32 z = 0; z < update.radius; z++) {
+						const int32 n = update.radius / 2;
+						const int32 nx = x - n;
+						const int32 ny = y - n;
+						const int32 nz = z - n;
+
+						const auto oldMaterial = VoxelVolume->getVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz).getMaterial();
+
+						VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
+						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
+
+						if (VoxelWorldUpdate_Event.IsBound()) { VoxelWorldUpdate_Event.Broadcast(update.causeActor, update.origin, oldMaterial, update.material, update.bShouldDrop); }
+					}
+				}
+			}
+		}
+		catch (...) {
+			UE_LOG(LogTemp, Error, TEXT("Caught exception in voxelUpdateQueue processing."));
+			continue;
+		}
+	}
+}
+
+void APagedWorld::WorldNewRegionsTick() {
+	// pop render queue
+	// queue is multi input single consumer
+	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
+		// only the server / singleplayer generates world
+		while (!worldGenerationQueue.IsEmpty()) {
+			// doing x per tick reduces hitches by a good amount, but causes slower loading times
+			FWorldGenerationTaskOutput gen;
+			worldGenerationQueue.Dequeue(gen);
+
+			for (int32 x = 0; x < REGION_SIZE; x++) {
+				for (int32 y = 0; y < REGION_SIZE; y++) {
+					for (int32 z = 0; z < REGION_SIZE; z++) {
+						// 
+						VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
+					}
+				}
+			}
+			remainingRegionsToGenerate--;
+			MarkRegionDirtyAndAdjacent(gen.pos);
+		}
+	}
+}
+
+void APagedWorld::VoxelNetClientTick() {
+	if (VoxelNetClient_VoxelClient.IsValid()) {
+		auto client = VoxelNetClient_VoxelClient.Get();
+
+		while (!client->handshakes.IsEmpty()) {
+			// while we have a reference to the client may as well process handshakes
+			int64 cookie = 0;
+			client->handshakes.Dequeue(cookie);
+			if (VoxelNetHandshake_Event.IsBound()) { VoxelNetHandshake_Event.Broadcast(cookie); }
+		}
+
+		while (!client->downloadedRegions.IsEmpty()) {
+			Packet::RegionData data;
+			client->downloadedRegions.Dequeue(data);
+
+			for (int x = 0; x < REGION_SIZE; x++) {
+				for (int y = 0; y < REGION_SIZE; y++) {
+					for (int z = 0; z < REGION_SIZE; z++) {
+						VoxelVolume->setVoxel(x + data.x, y + data.y, z + data.z, PolyVox::MaterialDensityPair88(data.data[0][x][y][z], data.data[1][x][y][z]));
+					}
+				}
+			}
+			MarkRegionDirtyAndAdjacent(FIntVector(data.x, data.y, data.z));
+			
+		}
+	}
+}
+
+void APagedWorld::VoxelNetServerTick() {
+	while (!VoxelNetServer_packetQueue.IsEmpty()) {
+		FPacketTaskOutput output;
+		VoxelNetServer_packetQueue.Dequeue(output);
+		VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
+	}
+}
+
 void APagedWorld::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
 	// get any recently generated packets and put them in the queue
 	if (bIsVoxelNetServer) {
-		while (!VoxelNetServer_packetQueue.IsEmpty()) {
-			FPacketTaskOutput output;
-			VoxelNetServer_packetQueue.Dequeue(output);
-			VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
-		}
+		VoxelNetServerTick();
 	}
 #ifdef WORLD_TICK_TRACKING
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
 #endif
 		VolumeMutex.Lock();
-		// pop render queue
-		// queue is multi input single consumer
-		if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-			// only the server / singleplayer generates world
-			while (!worldGenerationQueue.IsEmpty()) {
-				// doing x per tick reduces hitches by a good amount, but causes slower loading times
-				FWorldGenerationTaskOutput gen;
-				worldGenerationQueue.Dequeue(gen);
-
-				for (int32 x = 0; x < REGION_SIZE; x++) {
-					for (int32 y = 0; y < REGION_SIZE; y++) {
-						for (int32 z = 0; z < REGION_SIZE; z++) {
-							// 
-							VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
-						}
-					}
-				}
-				remainingRegionsToGenerate--;
-				MarkRegionDirtyAndAdjacent(gen.pos);
-			}
-		}
+		
+		WorldNewRegionsTick();
 
 #ifdef WORLD_TICK_TRACKING
 	}
@@ -122,66 +190,17 @@ void APagedWorld::Tick(float DeltaTime) {
 		SCOPE_CYCLE_COUNTER(STAT_WorldVoxelUpdates);
 #endif
 		// also voxelmodify queue
-		while (!voxelUpdateQueue.IsEmpty()) {
-			FVoxelUpdate update;
-			voxelUpdateQueue.Dequeue(update);
-
-			try {
-				for (int32 x = 0; x < update.radius; x++) {
-					for (int32 y = 0; y < update.radius; y++) {
-						for (int32 z = 0; z < update.radius; z++) {
-							const int32 n = update.radius / 2;
-							const int32 nx = x - n;
-							const int32 ny = y - n;
-							const int32 nz = z - n;
-
-							const auto oldMaterial = VoxelVolume->getVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz).getMaterial();
-
-							VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
-							MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
-
-							if (VoxelWorldUpdate_Event.IsBound()) { VoxelWorldUpdate_Event.Broadcast(update.causeActor, update.origin, oldMaterial, update.material); }
-						}
-					}
-				}
-			}
-			catch (...) {
-				UE_LOG(LogTemp, Error, TEXT("Caught exception in voxelUpdateQueue processing."));
-				continue;
-			}
-		}
+		VoxelUpdatesTick();
 #ifdef WORLD_TICK_TRACKING
 	}
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldDirtyRegions);
 #endif
-		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time 
+		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time
 		dirtyRegions.Reset();
+		
 		if (!bIsVoxelNetServer) {
-			if (VoxelNetClient_VoxelClient.IsValid()) {
-				auto client = VoxelNetClient_VoxelClient.Get();
-
-				while (!client->handshakes.IsEmpty()) {
-					// while we have a reference to the client may as well process handshakes
-					int64 cookie = 0;
-					client->handshakes.Dequeue(cookie);
-					if (VoxelNetHandshake_Event.IsBound()) { VoxelNetHandshake_Event.Broadcast(cookie); }
-				}
-
-				while (!client->downloadedRegions.IsEmpty()) {
-					Packet::RegionData data;
-					client->downloadedRegions.Dequeue(data);
-
-					for (int x = 0; x < REGION_SIZE; x++) {
-						for (int y = 0; y < REGION_SIZE; y++) {
-							for (int z = 0; z < REGION_SIZE; z++) {
-								VoxelVolume->setVoxel(x + data.x, y + data.y, z + data.z, PolyVox::MaterialDensityPair88(data.data[0][x][y][z], data.data[1][x][y][z]));
-							}
-						}
-					}
-					MarkRegionDirtyAndAdjacent(FIntVector(data.x, data.y, data.z));
-				}
-			}
+			VoxelNetClientTick();
 		}
 
 		VolumeMutex.Unlock();
@@ -239,6 +258,7 @@ void APagedWorld::Tick(float DeltaTime) {
 					if(VoxelNetServer_SendPacketsToPagingComponent(pager, packets)){ // this is the typical send that most packets go thru
 						for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
 						pager->bIsConnectedToVoxelnet = true;
+						pager->OnSentRegionPacket(hits.Num());
 					} else {
 						pager->bIsConnectedToVoxelnet = false;
 					}
@@ -452,7 +472,7 @@ void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
 
 	for (auto& unload : toUnload) {
 		regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1);
-		UE_LOG(LogTemp, Warning, TEXT("Paging out region %s"), *unload.ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("Paging out region %s"), *unload.ToString());
 	}
 
 	for (auto& load : toLoad) {

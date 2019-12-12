@@ -157,7 +157,9 @@ enum {
 	Block_Grass,
 	Block_Dirt,
 	Block_Stone,
-	Block_Ore,
+	Block_Iron,
+	Block_Gold,
+	Block_Gunpowder,
 };
 
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
@@ -166,7 +168,9 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z
 	float ore = noise[1]->GetNoise3D(x,y,z);
 
 	if(z < _height - (10+randomness)) {
-		if(ore <= .2) return PolyVox::MaterialDensityPair88(Block_Ore, 255);
+		if(ore >= .1 && ore <= .12) return PolyVox::MaterialDensityPair88(Block_Iron, 255);
+		if(ore >= .12 && ore <= .15) return PolyVox::MaterialDensityPair88(Block_Gold, 255);
+		if(ore >= .15 && ore <= .2) return PolyVox::MaterialDensityPair88(Block_Gunpowder, 255);
 		else return PolyVox::MaterialDensityPair88(Block_Stone, 255);
 	}
 	if(z < _height - (2+randomness)) return PolyVox::MaterialDensityPair88(Block_Dirt, 255);
