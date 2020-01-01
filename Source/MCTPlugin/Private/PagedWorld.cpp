@@ -6,7 +6,6 @@
 #include "Networking/Public/Common/TcpSocketBuilder.h"
 #include "Networking/Public/Interfaces/IPv4/IPv4Address.h"
 #include <PolyVox/MaterialDensityPair.h>
-#include "MemoryReader.h"
 #include "Kismet/GameplayStatics.h"
 #include "ISavableWithRegion.h"
 #include "ExtractionThreads.h"
@@ -489,7 +488,7 @@ void APagedWorld::RegisterPlayerWithCookie(APlayerController* player, int64 cook
 			const auto handshake = VoxelNetServer_SentHandshakes.FindRef(cookie);
 			VoxelNetServer_SentHandshakes.Remove(cookie);
 
-			if (handshake.IsValid() && Role == ROLE_Authority) {
+			if (handshake.IsValid() && GetLocalRole() == ROLE_Authority) {
 				VoxelNetServer_PlayerVoxelServers.Add(player, handshake);
 				UE_LOG(LogTemp, Warning, TEXT("Registered player controller with cookie %llu."), cookie);
 			}

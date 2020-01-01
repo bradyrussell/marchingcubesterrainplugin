@@ -1,7 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 #include "StorageProviderBase.h"
-#include "BufferArchive.h"
+
 #include "Config.h"
+#include "Serialization/BufferArchive.h"
 
 StorageProviderBase::StorageProviderBase()
 	: KeyPrefix(""), KeySuffix("") {
@@ -164,7 +165,7 @@ int StorageProviderBase::GetDatabaseFormat() {
 
 bool StorageProviderBase::SetDatabaseFormat(int Format) {
 	char buf[16];
-	itoa(Format, buf, 10);
+	_itoa(Format, buf, 10);
 	return Put(DB_VERSION_TAG, buf);
 }
 
