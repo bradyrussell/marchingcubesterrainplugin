@@ -275,8 +275,8 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
-		//WorldStorageProvider = new StorageProviderTMap(true);
-		WorldStorageProvider = new StorageProviderNull();
+		WorldStorageProvider = new StorageProviderTMap(true);
+		//WorldStorageProvider = new StorageProviderNull();
 		
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 

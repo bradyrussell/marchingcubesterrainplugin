@@ -20,7 +20,6 @@ public:
 	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) FVector OverrideLocation;
 	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bIsConnectedToVoxelnet = false;
 	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bFreezePawn = false;
-
 	
 	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
 
