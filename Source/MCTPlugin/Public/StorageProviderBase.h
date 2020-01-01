@@ -32,7 +32,7 @@ public:
 
 	// Optionally allowed to override because some StorageProviders have character restrictions e.g. flatfile
 	virtual std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W);
-	
+
 	bool PutBytes(std::string Key, TArray<uint8>& Bytes);
 	bool GetBytes(std::string Key, TArray<uint8>& Bytes);
 
