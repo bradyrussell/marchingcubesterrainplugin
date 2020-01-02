@@ -1,9 +1,8 @@
 #pragma once
-#include "Array.h"
-#include "BufferArchive.h"
-#include "ArchiveSaveCompressedProxy.h"
-#include "ArchiveLoadCompressedProxy.h"
+
 #include "Config.h"
+#include "Serialization/ArchiveSaveCompressedProxy.h"
+#include "Serialization/ArchiveLoadCompressedProxy.h"
 
 #define SOCKET_DELAY .001
 #define SOCKET_TIMEOUT 10.0

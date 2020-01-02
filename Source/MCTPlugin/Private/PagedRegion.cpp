@@ -1,7 +1,8 @@
 #include "PagedRegion.h"
 #include "PolyVox/CubicSurfaceExtractor.h"
-#include "UnrealNetwork.h"
+
 #include "ComponentReregisterContext.h"
+#include "Net/UnrealNetwork.h"
 
 //cleaned up
 

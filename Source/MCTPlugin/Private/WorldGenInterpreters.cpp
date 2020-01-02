@@ -167,6 +167,9 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z
 	int32 randomness = noise[0]->GetNoise3D(x,y,_height);
 	float ore = noise[1]->GetNoise3D(x,y,z);
 
+	float cave = noise[4]->GetNoise3D(x,y,z);
+	if(cave > 1)  return PolyVox::MaterialDensityPair88(Block_Air,0);
+	
 	if(z < _height - (10+randomness)) {
 		if(ore >= .1 && ore <= .12) return PolyVox::MaterialDensityPair88(Block_Iron, 255);
 		if(ore >= .12 && ore <= .15) return PolyVox::MaterialDensityPair88(Block_Gold, 255);
@@ -175,6 +178,6 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z
 	}
 	if(z < _height - (2+randomness)) return PolyVox::MaterialDensityPair88(Block_Dirt, 255);
 	if(z < _height - randomness/4) return PolyVox::MaterialDensityPair88(Block_Grass, 255);
-	return PolyVox::MaterialDensityPair88(Block_Air,255);
+	return PolyVox::MaterialDensityPair88(Block_Air,0);
 
 }
