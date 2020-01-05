@@ -8,6 +8,7 @@
 #include "VoxelNetThreads.h"
 
 #include "Config.h"
+#include "Serialization/ObjectAndNameAsStringProxyArchive.h"
 #include "Structs.generated.h"
 
 //https://garvinized.com/posts/2016/voxel-terrain-in-unreal-engine-4-part-3/
@@ -96,6 +97,7 @@ USTRUCT(BlueprintType)
 	AActor* causeActor = nullptr;
 };
 
+//FVoxelExplosion(TMap<uint8,float> MaterialExplosionResistances ??)
 
 
 USTRUCT(BlueprintType)
@@ -118,3 +120,32 @@ USTRUCT(BlueprintType)
 	int64 cookie = 0;
 	TSharedPtr<VoxelNetThreads::VoxelNetServer> server;
 };
+
+
+ struct FVoxelWorldSaveGameArchive : public FObjectAndNameAsStringProxyArchive
+ {
+     FVoxelWorldSaveGameArchive(FArchive& InInnerArchive)
+         :   FObjectAndNameAsStringProxyArchive(InInnerArchive, false)
+     { 
+         ArIsSaveGame = true;
+     	ArNoDelta = true;
+     }
+ };
+
+USTRUCT()
+ struct FVoxelWorldActorRecord {
+	GENERATED_USTRUCT_BODY()
+	
+	FString ActorClass;
+	FTransform ActorTransform;
+	TArray<uint8> ActorData;
+
+		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldActorRecord& Record){
+		Ar << Record.ActorClass;
+		Ar << Record.ActorTransform;
+		Ar << Record.ActorData;
+		return Ar;
+	}
+	
+ };
+
