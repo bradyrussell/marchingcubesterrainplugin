@@ -244,7 +244,7 @@ void APagedWorld::Tick(float DeltaTime) {
 				TArray<FIntVector> cachedPackets;
 				VoxelNetServer_regionPackets.GetKeys(cachedPackets);
 
-				TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);;
+				TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);
 
 				for (auto& waitingFor : pager->waitingForPackets.Intersect(cacheSet)) {
 					// where waitingFor and the cache intersect send packets
@@ -290,6 +290,7 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 
 void APagedWorld::PostInitializeComponents() {
 	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
+	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 2 * 1024 * 1024 * 1024,REGION_SIZE));
 	Super::PostInitializeComponents();
 }
 

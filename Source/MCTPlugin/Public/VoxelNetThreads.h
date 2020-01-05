@@ -52,7 +52,7 @@ namespace VoxelNetThreads {
 		}
 
 		////// runnable api ///////////
-		const int BUFFER_SIZE = 512 * 1024;
+		const int BUFFER_SIZE = 1024 * 1024; // todo reuse buffer
 
 		virtual uint32 Run() override {
 			int32 number = 0;

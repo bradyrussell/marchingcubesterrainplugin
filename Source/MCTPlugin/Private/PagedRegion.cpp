@@ -27,7 +27,7 @@ void APagedRegion::BeginPlay() {
 	RuntimeMesh->BodyInstance.SetResponseToAllChannels(ECR_Block);
 
 	/// DISABLING THIS STOPS THE NAN ERROR IN EDITOR. 
-	RuntimeMesh->SetCollisionUseAsyncCooking(World->bUseAsyncCollision); // this gave more performance gains than all the render queues as far as i can tell
+	//RuntimeMesh->SetCollisionUseAsyncCooking(World->bUseAsyncCollision); // this gave more performance gains than all the render queues as far as i can tell
 	RuntimeMesh->RegisterComponent(); // NAN error happens on this call
 	
 	//this is meant to allow the regions map to be replicated
@@ -44,7 +44,7 @@ void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
 void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	if (RuntimeMesh == nullptr) { UE_LOG(LogTemp, Error, TEXT("There is no mesh when trying to render parsed.")); }
-
+	
 	for (int32 Material = 0; Material < output.section.Num(); Material++) {
 		if (output.section[Material].Indices.Num() > 0) {// fixes dhd3d resource crash 
 			FRuntimeMeshDataPtr Data = RuntimeMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
@@ -68,6 +68,11 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 			RuntimeMesh->ClearMeshSection(Material); // fixes not being able to remove last polys of a material from a region
 			bSectionExists[Material] = false;
 		}
+	}
+
+	// maybe the nan error is because this creates the mesh?
+	if(RuntimeMesh->IsCollisionUsingAsyncCooking() != World->bUseAsyncCollision) {
+		RuntimeMesh->SetCollisionUseAsyncCooking(World->bUseAsyncCollision);
 	}
 }
 
