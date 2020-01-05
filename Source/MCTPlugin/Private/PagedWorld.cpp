@@ -15,6 +15,7 @@
 #include "StorageProviderFlatfile.h"
 #include "StorageProviderNull.h"
 #include "StorageProviderTMap.h"
+#include "Async/Async.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -31,7 +32,11 @@ APagedWorld::APagedWorld() {
 APagedWorld::~APagedWorld() {
 }
 
-void APagedWorld::BeginPlay() { Super::BeginPlay(); }
+void APagedWorld::BeginPlay() {
+	Super::BeginPlay();
+	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
+	VoxelWorldThreadPool->Create(16,128*1024);
+}
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
@@ -156,7 +161,6 @@ void APagedWorld::VoxelNetClientTick() {
 				}
 			}
 			MarkRegionDirtyAndAdjacent(FIntVector(data.x, data.y, data.z));
-			
 		}
 	}
 }
@@ -172,15 +176,13 @@ void APagedWorld::VoxelNetServerTick() {
 void APagedWorld::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
 	// get any recently generated packets and put them in the queue
-	if (bIsVoxelNetServer) {
-		VoxelNetServerTick();
-	}
+	if (bIsVoxelNetServer) { VoxelNetServerTick(); }
 #ifdef WORLD_TICK_TRACKING
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
 #endif
 		VolumeMutex.Lock();
-		
+
 		WorldNewRegionsTick();
 
 #ifdef WORLD_TICK_TRACKING
@@ -197,10 +199,8 @@ void APagedWorld::Tick(float DeltaTime) {
 #endif
 		auto dirtyClone = dirtyRegions; // we dont want to include the following dirty regions til next time
 		dirtyRegions.Reset();
-		
-		if (!bIsVoxelNetServer) {
-			VoxelNetClientTick();
-		}
+
+		if (!bIsVoxelNetServer) { VoxelNetClientTick(); }
 
 		VolumeMutex.Unlock();
 
@@ -233,36 +233,34 @@ void APagedWorld::Tick(float DeltaTime) {
 
 				//if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
-			else {
-				OnRegionError(gen.region);
-			}
+			else { OnRegionError(gen.region); }
 		}
 
 		if (bIsVoxelNetServer) {
-				for (auto& pager : pagingComponents) {
-					TArray<TArray<uint8>> packets;
-					TSet<FIntVector> hits;
+			for (auto& pager : pagingComponents) {
+				TArray<TArray<uint8>> packets;
+				TSet<FIntVector> hits;
 
-					TArray<FIntVector> cachedPackets;
-					VoxelNetServer_regionPackets.GetKeys(cachedPackets);
+				TArray<FIntVector> cachedPackets;
+				VoxelNetServer_regionPackets.GetKeys(cachedPackets);
 
-					TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);;
+				TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);;
 
-					for (auto& waitingFor : pager->waitingForPackets.Intersect(cacheSet)) { // where waitingFor and the cache intersect send packets
-						packets.Add(VoxelNetServer_regionPackets.FindRef(waitingFor));
-						hits.Emplace(waitingFor);
-					}
-
-					// send packets to the pager's owner
-					if(VoxelNetServer_SendPacketsToPagingComponent(pager, packets)){ // this is the typical send that most packets go thru
-						for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
-						pager->bIsConnectedToVoxelnet = true;
-						pager->OnSentRegionPacket(hits.Num());
-					} else {
-						pager->bIsConnectedToVoxelnet = false;
-					}
-					
+				for (auto& waitingFor : pager->waitingForPackets.Intersect(cacheSet)) {
+					// where waitingFor and the cache intersect send packets
+					packets.Add(VoxelNetServer_regionPackets.FindRef(waitingFor));
+					hits.Emplace(waitingFor);
 				}
+
+				// send packets to the pager's owner
+				if (VoxelNetServer_SendPacketsToPagingComponent(pager, packets)) {
+					// this is the typical send that most packets go thru
+					for (auto& hit : hits) { pager->waitingForPackets.Remove(hit); }
+					pager->bIsConnectedToVoxelnet = true;
+					pager->OnSentRegionPacket(hits.Num());
+				}
+				else { pager->bIsConnectedToVoxelnet = false; }
+			}
 		}
 
 
@@ -275,9 +273,9 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
-		WorldStorageProvider = new StorageProviderTMap(true);
-		//WorldStorageProvider = new StorageProviderNull();
-		
+		//WorldStorageProvider = new StorageProviderTMap(true);
+		WorldStorageProvider = new StorageProviderNull();
+
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
 		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
@@ -324,9 +322,10 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	}
 }
 
+
 void APagedWorld::QueueRegionRender(FIntVector pos) {
-	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(); }
-	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(); }
+	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
+	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
 }
 
 void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
@@ -369,7 +368,7 @@ void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uin
 void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		remainingRegionsToGenerate++;
-		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, RegionCoords))->StartBackgroundTask();
+		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, RegionCoords))->StartBackgroundTask(VoxelWorldThreadPool);
 	}
 }
 
@@ -388,27 +387,22 @@ void APagedWorld::ForceSaveWorld() {
 bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
 	if (packets.Num() > 0) {
 		auto pagingPawn = Cast<APawn>(pager->GetOwner());
-		if (pagingPawn != nullptr) {
-			auto controller = Cast<APlayerController>(pagingPawn->GetController());
-			if (controller != nullptr) {
-				if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
-					auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
-					server->Get()->UploadRegions(packets);
-					return true;
-				}
-				else {
-					// this gets spammy
-					//UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
-					return false;
-				}
+		APlayerController* controller = pagingPawn == nullptr ? Cast<APlayerController>(pager->GetOwner()) : Cast<APlayerController>(pagingPawn->GetController());
+
+		if (controller != nullptr) {
+			if (VoxelNetServer_PlayerVoxelServers.Contains(controller)) {
+				auto server = VoxelNetServer_PlayerVoxelServers.Find(controller);
+				server->Get()->UploadRegions(packets);
+				return true;
 			}
 			else {
-				UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Controller is not player controller."));
+				// this gets spammy
+				//UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
 				return false;
 			}
 		}
 		else {
-			UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Paging component owner is not pawn."));
+			UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Unable to find controller for pager."));
 			return false;
 		}
 	}
@@ -443,11 +437,11 @@ void APagedWorld::PagingComponentTick() {
 
 			if (bIsVoxelNetServer) {
 				/*auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
-
-				// since the vast majority of packets are delayed maybe we should just delay all of them to simplify
-				for (auto& uploadRegion : toUpload) {
-						pager->waitingForPackets.Add(uploadRegion);
-				}*/
+							  
+											  // since the vast majority of packets are delayed maybe we should just delay all of them to simplify
+											  for (auto& uploadRegion : toUpload) {
+													  pager->waitingForPackets.Add(uploadRegion);
+											  }*/
 
 				pager->waitingForPackets.Append(pager->subscribedRegions.Difference(previousSubscribedRegions));
 			}
@@ -463,9 +457,9 @@ void APagedWorld::PagingComponentTick() {
 void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
 	TArray<FIntVector> currentRegionsArr;
 	regions.GetKeys(currentRegionsArr);
-	
+
 	const TSet<FIntVector> currentRegions(currentRegionsArr);
-	
+
 	auto toUnload = currentRegions.Difference(regionsToLoad); // to unload
 	auto toLoad = regionsToLoad.Difference(currentRegions); // to load
 
@@ -512,7 +506,6 @@ void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<Poly
 	return;
 }
 
-
 void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
 		const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
@@ -552,10 +545,10 @@ bool APagedWorld::VoxelNetServer_StartServer() {
 
 bool APagedWorld::VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIPv4Endpoint& endpoint) {
 	if (bIsVoxelNetServer) {
-		
 		int64 cookie = FMath::RandRange(-255, 255); // min and max 64 dont work at all, weird stuff going on here
-		while(cookie == FMath::RandRange(-255, 255)) {  // this happens on early connects
-			cookie = FMath::RandRange(-255, 255); 
+		while (cookie == FMath::RandRange(-255, 255)) {
+			// this happens on early connects
+			cookie = FMath::RandRange(-255, 255);
 			UE_LOG(LogTemp, Warning, TEXT("Failed to generate random cookie for %s, retrying..."), *endpoint.ToString());
 			FPlatformProcess::Sleep(1);
 		}

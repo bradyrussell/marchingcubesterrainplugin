@@ -32,7 +32,14 @@ void UTerrainPagingComponent::OnSentRegionPacket(int Num) {
 }
 
 FVector UTerrainPagingComponent::GetPagingLocation() const {
-	return bUseOverrideLocation ? OverrideLocation : GetOwner()->GetActorLocation();
+	if(bUseOverrideLocation) return OverrideLocation;
+
+	APlayerController* controller = Cast<APlayerController>(GetOwner());
+	if(controller) {
+		auto pawn = controller->GetPawn();
+		if(pawn) return pawn->GetActorLocation(); // if there is no pawn this will return the controller pos, not ideal but what else to do?
+	}
+	return GetOwner()->GetActorLocation();
 }
 
 void UTerrainPagingComponent::BeginPlay() {
