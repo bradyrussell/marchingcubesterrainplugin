@@ -35,7 +35,7 @@ APagedWorld::~APagedWorld() {
 void APagedWorld::BeginPlay() {
 	Super::BeginPlay();
 	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
-	VoxelWorldThreadPool->Create(16,128*1024);
+	VoxelWorldThreadPool->Create(FPlatformMisc::NumberOfCoresIncludingHyperthreads(),128*1024);
 }
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
