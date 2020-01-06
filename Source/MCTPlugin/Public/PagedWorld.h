@@ -80,6 +80,8 @@ public:
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void ForceSaveWorld() ;
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PreSaveWorld();
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PostSaveWorld();
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void SaveAllDataForRegions(TSet<FIntVector> Regions);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void LoadAllDataForRegions(TSet<FIntVector> Regions);
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPostSaveWorld PostSaveWorld_Event;
 

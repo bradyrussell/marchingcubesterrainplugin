@@ -12,9 +12,6 @@
 #include "WorldGenThreads.h"
 #include "StorageProviderBase.h"
 #include "StorageProviderLevelDB.h"
-#include "StorageProviderFlatfile.h"
-#include "StorageProviderNull.h"
-#include "StorageProviderTMap.h"
 #include "Async/Async.h"
 
 #ifdef WORLD_TICK_TRACKING
@@ -35,7 +32,7 @@ APagedWorld::~APagedWorld() {
 void APagedWorld::BeginPlay() {
 	Super::BeginPlay();
 	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
-	VoxelWorldThreadPool->Create(FPlatformMisc::NumberOfCoresIncludingHyperthreads(),256*1024);
+	VoxelWorldThreadPool->Create(FPlatformMisc::NumberOfCoresIncludingHyperthreads(), 256 * 1024);
 }
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
@@ -356,7 +353,10 @@ FIntVector APagedWorld::WorldToVoxelCoords(FVector WorldCoords) { return FIntVec
 
 FVector APagedWorld::VoxelToWorldCoords(FIntVector VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
 
-bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) { return true; }
+bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
+	//cause is valid and cause is less than x away , maybe make one without radius because thats usually server side 
+	return true;
+}
 
 void APagedWorld::Server_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
 	Multi_ModifyVoxel(VoxelLocation, Radius, Material, Density, cause, bIsSpherical, bShouldDrop);
@@ -383,6 +383,79 @@ void APagedWorld::ForceSaveWorld() {
 	Flush();
 	VolumeMutex.Unlock();
 	PostSaveWorld();
+}
+
+void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
+	TArray<AActor*> outActors;
+	UGameplayStatics::GetAllActorsWithInterface(this, UISavableWithRegion::StaticClass(), outActors);
+
+	TArray<FVoxelWorldActorRecord> regionActorRecords;
+	TArray<AActor*> saved;
+	for (auto& unload : Regions) {
+		for (auto& elem : outActors) {
+			const FTransform Transform = IISavableWithRegion::Execute_GetSaveTransform(elem);
+			const FIntVector saveRegion = VoxelToRegionCoords(WorldToVoxelCoords(Transform.GetLocation()));
+			if (saveRegion == unload) {
+				IISavableWithRegion::Execute_OnPreSave(elem);
+				FVoxelWorldActorRecord record;
+
+				record.ActorClass = elem->GetClass()->GetPathName();
+				record.ActorTransform = Transform;
+
+				FMemoryWriter writer(record.ActorData, true);
+				FVoxelWorldSaveGameArchive proxy(writer);
+
+				elem->Serialize(proxy);
+
+				proxy.Flush();
+				proxy.Close();
+				writer.Flush();
+				writer.Close();
+
+				regionActorRecords.Add(record);
+				saved.Add(elem);
+
+				IISavableWithRegion::Execute_OnSaved(elem);
+				elem->Destroy();
+			}
+		}
+		outActors.RemoveAll([saved](AActor* a) { return saved.Contains(a); });
+
+		FBufferArchive region_actors(true);
+		region_actors << regionActorRecords;
+
+		WorldStorageProvider->PutRegionalData(unload, REGIONAL_DATA_ENTITY, region_actors);
+
+		if (regionActorRecords.Num() > 0)
+		UE_LOG(LogTemp, Warning, TEXT("[db] Saved region data %s."), *BytesToHex(region_actors.GetData(),region_actors.Num()));
+	}
+}
+
+void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
+	// load actors
+	for (auto& load : Regions) {
+		TArray<uint8> region_actors;
+		if (WorldStorageProvider->GetRegionalData(load, REGIONAL_DATA_ENTITY, region_actors)) {
+			TArray<FVoxelWorldActorRecord> regionActorRecords;
+
+			FMemoryReader reader(region_actors, true);
+			reader << regionActorRecords;
+
+			for (auto& record : regionActorRecords) {
+				FActorSpawnParameters params;
+
+				UClass* recordClass = FindObject<UClass>(ANY_PACKAGE, *record.ActorClass);
+
+				AActor* NewActor = GetWorld()->SpawnActor<AActor>(recordClass, record.ActorTransform.GetLocation(), record.ActorTransform.GetRotation().Rotator(), params);
+
+				FMemoryReader MemoryReader(record.ActorData, true);
+				FVoxelWorldSaveGameArchive Ar(MemoryReader);
+				NewActor->Serialize(Ar);
+
+				IISavableWithRegion::Execute_OnLoaded(NewActor);
+			}
+		}
+	}
 }
 
 bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
@@ -438,11 +511,11 @@ void APagedWorld::PagingComponentTick() {
 
 			if (bIsVoxelNetServer) {
 				/*auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
-							  
-											  // since the vast majority of packets are delayed maybe we should just delay all of them to simplify
-											  for (auto& uploadRegion : toUpload) {
-													  pager->waitingForPackets.Add(uploadRegion);
-											  }*/
+											 
+															 // since the vast majority of packets are delayed maybe we should just delay all of them to simplify
+															 for (auto& uploadRegion : toUpload) {
+																	 pager->waitingForPackets.Add(uploadRegion);
+															 }*/
 
 				pager->waitingForPackets.Append(pager->subscribedRegions.Difference(previousSubscribedRegions));
 			}
@@ -464,81 +537,16 @@ void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
 	auto toUnload = currentRegions.Difference(regionsToLoad); // to unload
 	auto toLoad = regionsToLoad.Difference(currentRegions); // to load
 
-	TArray<AActor*> outActors;
-	UGameplayStatics::GetAllActorsWithInterface(this, UISavableWithRegion::StaticClass(), outActors); 
-	
+	SaveAllDataForRegions(toUnload);
+	LoadAllDataForRegions(toLoad);
+
 	for (auto& unload : toUnload) {
-		TArray<FVoxelWorldActorRecord> regionActorRecords;
-		TArray<AActor*> saved;
-			for (auto& elem : outActors) {
-		
-				const FTransform Transform = IISavableWithRegion::Execute_GetSaveTransform(elem);
-				const FIntVector saveRegion = VoxelToRegionCoords(WorldToVoxelCoords(Transform.GetLocation()));
-				if (saveRegion == unload) {
-					IISavableWithRegion::Execute_OnPreSave(elem);
-					FVoxelWorldActorRecord record;
-
-					record.ActorClass = elem->GetClass()->GetPathName();
-					record.ActorTransform = Transform;
-
-					FMemoryWriter writer(record.ActorData, true);
-					FVoxelWorldSaveGameArchive proxy(writer);
-
-					elem->Serialize(proxy);
-
-					proxy.Flush();
-					proxy.Close();
-					writer.Flush();
-					writer.Close();
-
-					regionActorRecords.Add(record);
-					saved.Add(elem);
-
-					IISavableWithRegion::Execute_OnSaved(elem);
-					elem->Destroy();
-				}
-			}
-			outActors.RemoveAll([saved](AActor* a) {
-				return saved.Contains(a);
-			});
-
-			FBufferArchive region_actors(true);
-			region_actors << regionActorRecords;
-
-			WorldStorageProvider->PutRegionalData(unload, REGIONAL_DATA_ENTITY, region_actors);
-
-		if(regionActorRecords.Num() > 0)
-			UE_LOG(LogTemp, Warning, TEXT("[db] Saved region data %s."), *BytesToHex(region_actors.GetData(),region_actors.Num()));
-
 		regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1);
 		//UE_LOG(LogTemp, Warning, TEXT("Paging out region %s"), *unload.ToString());
 	}
 
 	for (auto& load : toLoad) {
 		if (!regions.Contains(load)) {
-			// load actors
-			TArray<uint8> region_actors;
-			if(WorldStorageProvider->GetRegionalData(load, REGIONAL_DATA_ENTITY,region_actors)) {
-				TArray<FVoxelWorldActorRecord> regionActorRecords;
-
-				FMemoryReader reader(region_actors, true);
-				reader << regionActorRecords;
-
-				for(auto&record:regionActorRecords) {
-					FActorSpawnParameters params;
-
-					UClass* recordClass = FindObject<UClass>(ANY_PACKAGE, *record.ActorClass);
-					
-					AActor* NewActor = GetWorld()->SpawnActor<AActor>(recordClass, record.ActorTransform.GetLocation(), record.ActorTransform.GetRotation().Rotator(), params);
-
-					FMemoryReader MemoryReader(record.ActorData, true);
-					FVoxelWorldSaveGameArchive Ar(MemoryReader);
-					NewActor->Serialize(Ar);
-
-					IISavableWithRegion::Execute_OnLoaded(NewActor);
-				}
-			}
-			
 			getRegionAt(load);
 			MarkRegionDirtyAndAdjacent(load);
 		}
@@ -586,9 +594,9 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 		// AsyncTask(ENamedThreads::GameThread, [this, pos]() { // for now this will have to do
 		// 	
 		// });
-		
+
 #ifndef DONT_SAVE
-		world->WorldStorageProvider->PutRegion(pos, pChunk); 
+		world->WorldStorageProvider->PutRegion(pos, pChunk);
 #endif
 		//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
 	}
