@@ -64,6 +64,9 @@ void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
 	PreSaveWorld();
 
+	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
+	UnloadRegionsExcept(TSet<FIntVector>()); // force save all entities
+	
 	VolumeMutex.Lock();
 	VoxelVolume.Reset();
 
@@ -131,6 +134,7 @@ void APagedWorld::WorldNewRegionsTick() {
 			}
 			remainingRegionsToGenerate--;
 			MarkRegionDirtyAndAdjacent(gen.pos);
+			if(RegionGenerated_Event.IsBound()) RegionGenerated_Event.Broadcast(gen.pos);
 		}
 	}
 }
@@ -373,6 +377,10 @@ void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	}
 }
 
+float APagedWorld::GetHeightmapZ(int32 VoxelX, int32 VoxelY, uint8 HeightmapIndex) {
+	return GetNoiseGeneratorArray()[HeightmapIndex]->GetNoise2D(VoxelX, VoxelY);
+}
+
 int32 APagedWorld::getVolumeMemoryBytes() const { return VoxelVolume.Get()->calculateSizeInBytes(); }
 
 void APagedWorld::Flush() const { VoxelVolume.Get()->flushAll(); }
@@ -389,9 +397,9 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 	TArray<AActor*> outActors;
 	UGameplayStatics::GetAllActorsWithInterface(this, UISavableWithRegion::StaticClass(), outActors);
 
-	TArray<FVoxelWorldActorRecord> regionActorRecords;
-	TArray<AActor*> saved;
 	for (auto& unload : Regions) {
+		TArray<AActor*> saved;
+		TArray<FVoxelWorldActorRecord> regionActorRecords;
 		for (auto& elem : outActors) {
 			const FTransform Transform = IISavableWithRegion::Execute_GetSaveTransform(elem);
 			const FIntVector saveRegion = VoxelToRegionCoords(WorldToVoxelCoords(Transform.GetLocation()));
@@ -426,8 +434,8 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 
 		WorldStorageProvider->PutRegionalData(unload, REGIONAL_DATA_ENTITY, region_actors);
 
-		if (regionActorRecords.Num() > 0)
-		UE_LOG(LogTemp, Warning, TEXT("[db] Saved region data %s."), *BytesToHex(region_actors.GetData(),region_actors.Num()));
+		//if (regionActorRecords.Num() > 0)
+		//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s data %s."), *unload.ToString(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
 	}
 }
 
@@ -453,6 +461,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 				NewActor->Serialize(Ar);
 
 				IISavableWithRegion::Execute_OnLoaded(NewActor);
+				//UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s data %s."), *load.ToString(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
 			}
 		}
 	}
