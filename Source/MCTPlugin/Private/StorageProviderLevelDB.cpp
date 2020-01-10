@@ -2,9 +2,10 @@
 
 
 #include "StorageProviderLevelDB.h"
+#include "BufferArchive.h"
+#include "Paths.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/cache.h"
-#include "Misc/Paths.h"
 
 StorageProviderLevelDB::StorageProviderLevelDB(bool bUseOptimizations):bUseOptimizations(bUseOptimizations) {
 }

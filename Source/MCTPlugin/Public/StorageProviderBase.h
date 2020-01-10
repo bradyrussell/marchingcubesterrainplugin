@@ -7,13 +7,7 @@
 #include <PolyVox/MaterialDensityPair.h>
 #include <PolyVox/PagedVolume.h>
 
-/**	Small Map Test:
- *	Provider:	Save Time | Save Size | Files Created
- *			
-	* LevelDB:	300ms	 | 12mb		| 18
-	* Flatfile: 1280ms	 | 2mb		| 1,140
-	* TMap:		825ms	 | 1.7mb	| 1
- *
+/**
  * 
  */
 class MCTPLUGIN_API StorageProviderBase

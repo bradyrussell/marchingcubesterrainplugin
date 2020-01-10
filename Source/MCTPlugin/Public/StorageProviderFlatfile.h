@@ -5,6 +5,7 @@
 #include <string>
 #include "CoreMinimal.h"
 #include "StorageProviderBase.h"
+#include "leveldb/db.h"
 
 /**
  * 

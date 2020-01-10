@@ -2,13 +2,13 @@
 
 
 #include "StorageProviderFlatfile.h"
+#include "BufferArchive.h"
+#include "Paths.h"
+#include "PlatformFilemanager.h"
 #include "GenericPlatform/GenericPlatformFile.h"
-#include "Misc/Paths.h"
-#include "HAL/PlatformFilemanager.h"
-#include "Serialization/ArchiveSaveCompressedProxy.h"
-#include "Misc/FileHelper.h"
-#include "Serialization/ArchiveLoadCompressedProxy.h"
-
+#include "FileHelper.h"
+#include "ArchiveSaveCompressedProxy.h"
+#include "ArchiveLoadCompressedProxy.h"
 
 StorageProviderFlatfile::StorageProviderFlatfile() {
 	bRegionsUseSingleKey = true;

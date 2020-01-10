@@ -81,8 +81,7 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 
 PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height, float _caves, float _ore) {
 	PolyVox::MaterialDensityPair88 Voxel;
-
-
+	
 	if (z < (_height + 4) && (_caves > 1)) {
 		return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
 	}
@@ -151,4 +150,31 @@ EBiome WorldGen::Interpret_Biome(float _height, float temperatue, float moisture
 	//if(_height > 64) return MOUNTAINS;
 	//if(_height > 0) return PLAINS;
 	return MOUNTAINS;
+}
+
+enum {
+	Block_Air,
+	Block_Grass,
+	Block_Dirt,
+	Block_Stone,
+	Block_Iron,
+	Block_Gold,
+	Block_Gunpowder,
+};
+
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
+	int32 _height = noise[0]->GetNoise2D(x, y);
+	int32 randomness = noise[0]->GetNoise3D(x,y,_height);
+	float ore = noise[1]->GetNoise3D(x,y,z);
+
+	if(z < _height - (10+randomness)) {
+		if(ore >= .1 && ore <= .12) return PolyVox::MaterialDensityPair88(Block_Iron, 255);
+		if(ore >= .12 && ore <= .15) return PolyVox::MaterialDensityPair88(Block_Gold, 255);
+		if(ore >= .15 && ore <= .2) return PolyVox::MaterialDensityPair88(Block_Gunpowder, 255);
+		else return PolyVox::MaterialDensityPair88(Block_Stone, 255);
+	}
+	if(z < _height - (2+randomness)) return PolyVox::MaterialDensityPair88(Block_Dirt, 255);
+	if(z < _height - randomness/4) return PolyVox::MaterialDensityPair88(Block_Grass, 255);
+	return PolyVox::MaterialDensityPair88(Block_Air,255);
+
 }
