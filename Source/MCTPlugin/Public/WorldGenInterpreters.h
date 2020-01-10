@@ -20,6 +20,5 @@ namespace WorldGen {
 	PolyVox::MaterialDensityPair88 Interpret_Basic(int32 x, int32 y, int32 z, UUFNNoiseGenerator* material, UUFNNoiseGenerator* heightmap, UUFNNoiseGenerator* biome);
 
 	PolyVox::MaterialDensityPair88 Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise);
-	PolyVox::MaterialDensityPair88 Interpret_New(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise);
 	EBiome Interpret_Biome(float _height, float temperatue, float moisture);
 };

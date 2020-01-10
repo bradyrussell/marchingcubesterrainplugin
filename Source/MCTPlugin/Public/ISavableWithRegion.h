@@ -24,7 +24,5 @@ class MCTPLUGIN_API IISavableWithRegion
 public:
 
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") FTransform GetSaveTransform();
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") void OnPreSave();
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") void OnSaved();
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") void OnLoaded();
+	//static FTransform GetSaveTransform();
 };

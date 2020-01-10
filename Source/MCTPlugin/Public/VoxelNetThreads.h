@@ -1,11 +1,12 @@
 #pragma once
-
+#include "Runnable.h"
+#include "Queue.h"
 #include "Sockets.h"
+#include "BufferArchive.h"
+#include "PlatformProcess.h"
+#include "ArrayReader.h"
 #include "Networking/Public/Interfaces/IPv4/IPv4Endpoint.h"
 #include "VoxelNetPackets.h"
-#include "HAL/Runnable.h"
-#include "Serialization/BufferArchive.h"
-#include "Serialization/ArrayReader.h"
 
 class APagedWorld;
 
@@ -52,14 +53,13 @@ namespace VoxelNetThreads {
 		}
 
 		////// runnable api ///////////
-		const int BUFFER_SIZE = 1024 * 1024; // todo reuse buffer
+		const int BUFFER_SIZE = 512 * 1024;
 
 		virtual uint32 Run() override {
 			int32 number = 0;
 
 			while (running) {
-				FPlatformProcess::Sleep(SOCKET_DELAY); // todo fix crash when we read too few bytes w no sleep
-				//FPlatformProcess::Sleep(.2);
+				FPlatformProcess::Sleep(.005); // todo fix crash when we read too few bytes w no sleep
 				uint32 size;
 
 				KeepAlive();
@@ -111,7 +111,7 @@ namespace VoxelNetThreads {
 								copy << opcode;
 								copy << dataSize;
 
-							//UE_LOG(LogTemp, Warning, TEXT("Client: Received region response with a compressed size of %d. "), dataSize);
+								//UE_LOG(LogTemp, Warning, TEXT("Client: Received region response with a compressed size of %d. "), dataSize);
 
 								uint32 availableSize = 0;
 
@@ -121,7 +121,7 @@ namespace VoxelNetThreads {
 									if (!running)
 										return 0;
 									FPlatformProcess::Sleep(SOCKET_DELAY);
-									UE_LOG(LogTemp, Warning, TEXT("Client: Waiting for the rest of the region data... %d / %d"), availableSize, dataSize);
+									//UE_LOG(LogTemp, Warning, TEXT("Client: Waiting for the rest of the region data... %d / %d"), availableSize, dataSize);
 								}
 
 								if (socket->Recv(opcodeBuffer.GetData() + 5, FMath::Min((int32)dataSize, BUFFER_SIZE), BytesRead)) {
@@ -174,6 +174,7 @@ namespace VoxelNetThreads {
 		FSocket* socket;
 		FDateTime lastUpdate = FDateTime::Now();
 		const FIPv4Endpoint& endpoint;
+		//APagedWorld* world;
 		int64 cookie = 0;
 		bool running;
 
@@ -200,6 +201,7 @@ namespace VoxelNetThreads {
 			int32 BytesSent = 0;
 			Packet::MakeRegionCount(count, regions);
 			socket->Send(count.GetData(), count.Num(), BytesSent);
+			//UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent region count packet: %d. "), *endpoint.ToString(), regions);
 		}
 
 		////// runnable api ///////////
@@ -233,10 +235,9 @@ namespace VoxelNetThreads {
 						BytesTotal += BytesSent;
 					}
 					UE_LOG(LogTemp, Warning, TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
-					//FPlatformProcess::Sleep(SOCKET_DELAY); // todo see how changing this affects client
 				}
-				
-				FPlatformProcess::Sleep(SOCKET_DELAY); // todo see how changing this affects client
+
+				FPlatformProcess::Sleep(SOCKET_DELAY ); // todo see how changing this affects client
 				uint32 size;
 
 				if (socket->HasPendingData(size)) {
@@ -255,6 +256,7 @@ namespace VoxelNetThreads {
 							int32 BytesSent = 0;
 							Packet::MakeKeepAlive(keepalive);
 							socket->Send(keepalive.GetData(), keepalive.Num(), BytesSent);
+							//UE_LOG(LogTemp, Warning, TEXT("Server: Sent keepalive response packet. "));
 						}
 						else if (opcodeBuffer[0] == 0x5) {
 							// disconnect packet

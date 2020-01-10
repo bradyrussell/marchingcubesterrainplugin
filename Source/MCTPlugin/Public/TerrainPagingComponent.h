@@ -1,3 +1,5 @@
+// Copyright (c) 2016 Brandon Garvin
+
 #pragma once
 
 #include "PagedWorld.h"
@@ -14,29 +16,22 @@ public:
 	// Sets default values for this component's properties
 	UTerrainPagingComponent();
 
-	//Radius in regions
-	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
-	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bUseOverrideLocation;
-	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) FVector OverrideLocation;
-	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bIsConnectedToVoxelnet = false;
-	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bFreezePawn = false;
-	
-	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
+	UPROPERTY(Category = "Voxel World", BlueprintReadWrite, EditAnywhere)
+	int32 viewDistance = 2;
 
-	UFUNCTION(Category = "Paging Component", BlueprintPure) bool ShouldFreezePawn() const;
-	UFUNCTION(Category = "Paging Component", BlueprintCallable) bool PrepareToTeleport(const FVector Destination);
+	UPROPERTY(Category = "Voxel World", BlueprintReadOnly, VisibleAnywhere)
+	APagedWorld* world;
 
-	void OnSentRegionPacket(int Num);
-	int32 ExpectedRegions = 0;
-	bool bIsPreparingTeleport = false;
-	
+	//getCurrentRegion
 	TSet<FIntVector> subscribedRegions;
 	TSet<FIntVector> waitingForPackets;
-
-	FVector GetPagingLocation() const;
-	
 protected:
+	// Called when the game starts
 	virtual void BeginPlay() override;
+
 public:
+	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+
 };

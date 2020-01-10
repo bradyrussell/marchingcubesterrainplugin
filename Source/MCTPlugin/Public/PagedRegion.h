@@ -1,37 +1,60 @@
 #pragma once
+#include "UnrealFastNoisePlugin.h"
+#include "UnrealFastNoisePlugin/Public/UFNNoiseGenerator.h"
+
+#include "PolyVox/PagedVolume.h"
+#include "PolyVox/MaterialDensityPair.h"
+#include "PolyVox/Vector.h"
+#include "PolyVox/MarchingCubesSurfaceExtractor.h"
+#include "PolyVox/Mesh.h"
+
 #include "RuntimeMeshComponent.h"
 #include "RuntimeMeshSection.h"
+
+//#include "LevelDatabase.h"
+
+#include "AI/NavigationSystemBase.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "PagedWorld.h"
 #include "PagedRegion.generated.h"
 
-//cleaned up
 
 UCLASS()
 	class MCTPLUGIN_API APagedRegion : public AActor {
 	GENERATED_BODY()
 
 public:
+	// Sets default values for this actor's properties
 	APagedRegion();
 	~APagedRegion();
 protected:
+	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void PostInitializeComponents() override;
 public:
+	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+
+
 
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadWrite, VisibleAnywhere) class USceneComponent* Scene;
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleAnywhere, Meta = (ExposeFunctionCategories = "Mesh,Rendering,Physics,Components|RuntimeMesh", AllowPrivateAccess = "true"))
-	URuntimeMeshComponent* RuntimeMesh;
+	URuntimeMeshComponent* rMesh;
 
-	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, Replicated, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* World;
+	bool wasCreated[MAX_MATERIALS];
 
-	UFUNCTION(BlueprintCallable) void UpdateNavigation() const;
-	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
+	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, Replicated, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* world;
+
+	//UFUNCTION(Category = "Voxel Terrain", BlueprintCallable) void SlowRender();
+	//void RenderDecoded(PolyVox::Mesh<PolyVox::Vertex<PolyVox::MaterialDensityPair88>, unsigned int> decoded);
+
 	void RenderParsed(FExtractionTaskOutput output);
 
+	UFUNCTION(BlueprintCallable) void UpdateNavigation();
+	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
+
 private:
-	bool bSectionExists[MAX_MATERIALS];
+
 };

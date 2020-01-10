@@ -1,17 +1,17 @@
 #pragma once
+#include "Array.h"
+#include "BufferArchive.h"
+#include "ArchiveSaveCompressedProxy.h"
+#include "ArchiveLoadCompressedProxy.h"
 
-#include "Config.h"
-#include "Serialization/ArchiveSaveCompressedProxy.h"
-#include "Serialization/ArchiveLoadCompressedProxy.h"
-
-#define SOCKET_DELAY .001
+#define SOCKET_DELAY .02
 #define SOCKET_TIMEOUT 10.0
 #define PROTOCOL_VERSION 0x2
 
 namespace Packet {
 	struct RegionData {
 		int32 x,y,z;
-		uint8 data[2][REGION_SIZE][REGION_SIZE][REGION_SIZE];
+		uint8 data[2][32][32][32];
 	};
 
 
@@ -45,9 +45,9 @@ namespace Packet {
 		compressor << data.z;
 
 		for(int n=0; n < 2; n++){
-			for(int x=0; x < REGION_SIZE; x++){
-				for(int y=0; y < REGION_SIZE; y++){
-					for(int z=0; z < REGION_SIZE; z++) {
+			for(int x=0; x < 32; x++){
+				for(int y=0; y < 32; y++){
+					for(int z=0; z < 32; z++) {
 						compressor << data.data[n][x][y][z];
 					}
 				}
@@ -85,9 +85,9 @@ namespace Packet {
 		decompressor << data.z;
 
 		for(int n=0; n < 2; n++){
-			for(int x=0; x < REGION_SIZE; x++){
-				for(int y=0; y < REGION_SIZE; y++){
-					for(int z=0; z < REGION_SIZE; z++) {
+			for(int x=0; x < 32; x++){
+				for(int y=0; y < 32; y++){
+					for(int z=0; z < 32; z++) {
 						decompressor << data.data[n][x][y][z];
 					}
 				}
