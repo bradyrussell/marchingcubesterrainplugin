@@ -32,13 +32,15 @@ namespace VoxelNetThreads {
 		void Updated() { lastUpdate = FDateTime::Now(); }
 
 		void KeepAlive() {
-			if (lastUpdate + FTimespan::FromSeconds(SOCKET_TIMEOUT / 2) < FDateTime::Now()) {
-				FBufferArchive keepalive(true);
-				int32 BytesSent = 0;
-				Packet::MakeKeepAlive(keepalive);
-				socket->Send(keepalive.GetData(), keepalive.Num(), BytesSent);
-				Updated();
-				//UE_LOG(LogTemp, Warning, TEXT("Client: Sent keepalive packet. "));
+			if(socket && socket != nullptr && running){
+				if (lastUpdate + FTimespan::FromSeconds(SOCKET_TIMEOUT / 2) < FDateTime::Now()) {
+					FBufferArchive keepalive(true);
+					int32 BytesSent = 0;
+					Packet::MakeKeepAlive(keepalive);
+					socket->Send(keepalive.GetData(), keepalive.Num(), BytesSent);
+					Updated();
+					//UE_LOG(LogTemp, Warning, TEXT("Client: Sent keepalive packet. "));
+				}
 			}
 		}
 

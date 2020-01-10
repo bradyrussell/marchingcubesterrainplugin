@@ -14,6 +14,7 @@
 #include "Networking/Public/Common/TcpListener.h"
 #include "Structs.h"
 #include "StorageProviderBase.h"
+#include "WorldGeneratorBase.h"
 #include "PagedWorld.generated.h"
 
 //cleaned up
@@ -48,6 +49,13 @@ protected:
 	void VoxelNetClientTick();
 	void VoxelNetServerTick();
 	void PostInitializeComponents() override;
+	void BeginDestroy() override;
+
+	// PIE is not saving properly it just exits immediately without cleaning anything up...
+	void SaveAndShutdown();
+
+	bool bHasStarted = false;
+	bool bHasShutdown = false;
 
 public:
 	void Tick(float DeltaTime) override;
@@ -68,15 +76,20 @@ public:
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
 	FCriticalSection VolumeMutex; // lock for VoxelVolume
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
+	TSet<FIntVector> ForceLoadedRegions; 
 
 	/* Database */
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);
-	
 	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) void Flush() const;
+
+	/* Startup Helpers */
+	UFUNCTION(Category = "Voxel World|Launch", BlueprintCallable) void LaunchServer();
+	UFUNCTION(Category = "Voxel World|Launch", BlueprintCallable) void LaunchSingleplayer();
+	UFUNCTION(Category = "Voxel World|Launch", BlueprintCallable) void LaunchClient(FString Host, int32 Port = 0);
 
 	/* Saving */
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void ForceSaveWorld() ;
@@ -99,6 +112,7 @@ public:
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FRegionGenerated RegionGenerated_Event;
+	//WorldGeneratorBase * WorldGenerationProvider;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
 	float PagingComponentTickTimer = 0;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadWrite, EditAnywhere) float PagingComponentTickRate = 1.f;
