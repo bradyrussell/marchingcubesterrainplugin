@@ -8,6 +8,8 @@ This plugin allows for multiplayer runtime editable procedural voxel terrain in 
 
 This means you can create procedural worlds from a numeric seed which expand "infinitely" in any direction such as in Minecraft. This plugin uses cubic regions so there is infinite height and depth as well.
 
+Works with UE4 navmesh generation, check out NavInvokers for best performance.
+
 # Usage
 ## Download the plugin and dependencies to your Plugins folder
 This plugin as well as:
