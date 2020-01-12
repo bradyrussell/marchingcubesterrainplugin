@@ -2,8 +2,9 @@
 #include "WorldGeneratorBase.h"
 
 
-WorldGeneratorBase::WorldGeneratorBase(TArray<UUFNNoiseGenerator*> Noise):NoiseGenerators(Noise) {
+WorldGeneratorBase::WorldGeneratorBase() {
 }
 
 WorldGeneratorBase::~WorldGeneratorBase() {
 }
+

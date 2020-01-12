@@ -13,6 +13,8 @@
 #include "StorageProviderBase.h"
 #include "StorageProviderLevelDB.h"
 #include "Async/Async.h"
+#include "WorldGeneratorPlains.h"
+#include "StorageProviderNull.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -32,55 +34,17 @@ APagedWorld::~APagedWorld() {
 void APagedWorld::BeginPlay() {
 	Super::BeginPlay();
 	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
-	VoxelWorldThreadPool->Create(FPlatformMisc::NumberOfCoresIncludingHyperthreads(), 256 * 1024);
+	//VoxelWorldThreadPool->Create(FPlatformMisc::NumberOfCoresIncludingHyperthreads(), 256 * 1024);
+	VoxelWorldThreadPool->Create(4, 256 * 1024); // todo revert after testing
+
+	//if(bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
+		//WorldGenerationProvider = new WorldGeneratorPlains(GetNoiseGeneratorArray());
+		//UE_LOG(LogTemp, Warning, TEXT("Initialized worldgen with %d noise generators."), WorldGenerationProvider->NoiseGenerators.Num())
+	//}
 }
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {
-
-	if (bIsVoxelNetServer) {
-		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet server..."));
-		for (auto& elem : VoxelNetServer_ServerThreads) {
-			if (elem)
-				elem->Kill(true);
-		}
-		for (auto& elem : VoxelNetServer_VoxelServers) { elem.Reset(); }
-		if (VoxelNetServer_ServerListener.IsValid())
-			VoxelNetServer_ServerListener.Get()->Stop();
-		VoxelNetServer_ServerListener.Reset();
-		UE_LOG(LogTemp, Warning, TEXT("VoxelNet server has stopped."));
-	}
-	else if (!bIsVoxelNetSingleplayer) {
-		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet client..."));
-		if (VoxelNetClient_ClientThread)
-			VoxelNetClient_ClientThread->Kill(true);
-		VoxelNetClient_VoxelClient.Reset();
-		UE_LOG(LogTemp, Warning, TEXT("VoxelNet client has stopped."));
-	}
-
-	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
-	UE_LOG(LogTemp, Warning, TEXT("Saving and disconnecting world database..."));
-
-	const auto beforeSave = FDateTime::UtcNow();
-
-	PreSaveWorld();
-
-	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
-	UnloadRegionsExcept(TSet<FIntVector>()); // force save all entities
-	
-	VolumeMutex.Lock();
-	VoxelVolume.Reset();
-
-	if (bIsVoxelNetSingleplayer || bIsVoxelNetServer)
-		WorldStorageProvider->Close();
-
-	VolumeMutex.Unlock();
-
-	PostSaveWorld();
-
-	const auto afterSave = FDateTime::UtcNow() - beforeSave;
-
-	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
-	UE_LOG(LogTemp, Warning, TEXT("World database saved in %f ms."), afterSave.GetTotalMicroseconds()*0.001);
+	SaveAndShutdown();
 }
 
 void APagedWorld::VoxelUpdatesTick() {
@@ -272,10 +236,11 @@ void APagedWorld::Tick(float DeltaTime) {
 
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		WorldStorageProvider = new StorageProviderLevelDB(true);
+		bHasStarted = true;
+		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
 		//WorldStorageProvider = new StorageProviderTMap(true);
-		//WorldStorageProvider = new StorageProviderNull();
+		WorldStorageProvider = new StorageProviderNull();
 
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
@@ -293,6 +258,65 @@ void APagedWorld::PostInitializeComponents() {
 	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 2 * 1024 * 1024 * 1024,REGION_SIZE));
 	Super::PostInitializeComponents();
+}
+
+void APagedWorld::BeginDestroy() {
+	Super::BeginDestroy();
+	SaveAndShutdown();
+}
+
+void APagedWorld::SaveAndShutdown() {
+	if(bHasShutdown || !bHasStarted) return;
+	bHasShutdown = true;
+	VoxelWorldThreadPool->Destroy();
+	
+	if (bIsVoxelNetServer) {
+		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet server..."));
+		for (auto& elem : VoxelNetServer_ServerThreads) {
+			if (elem)
+				elem->Kill(true);
+		}
+		for (auto& elem : VoxelNetServer_VoxelServers) { elem.Reset(); }
+		if (VoxelNetServer_ServerListener.IsValid())
+			VoxelNetServer_ServerListener.Get()->Stop();
+		VoxelNetServer_ServerListener.Reset();
+		UE_LOG(LogTemp, Warning, TEXT("VoxelNet server has stopped."));
+	}
+	else if (!bIsVoxelNetSingleplayer) {
+		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet client..."));
+		if (VoxelNetClient_ClientThread)
+			VoxelNetClient_ClientThread->Kill(true);
+		VoxelNetClient_VoxelClient.Reset();
+		UE_LOG(LogTemp, Warning, TEXT("VoxelNet client has stopped."));
+	}
+
+	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
+	UE_LOG(LogTemp, Warning, TEXT("Saving and disconnecting world database..."));
+
+	const auto beforeSave = FDateTime::UtcNow();
+
+	PreSaveWorld();
+
+	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer){
+		UE_LOG(LogTemp, Warning, TEXT("Saving data for regions..."));
+		UnloadRegionsExcept(TSet<FIntVector>()); // force save all entities
+		UE_LOG(LogTemp, Warning, TEXT("Regional data saved."));
+	}
+	
+	VolumeMutex.Lock();
+	VoxelVolume.Reset();
+
+	if (bIsVoxelNetSingleplayer || bIsVoxelNetServer)
+		WorldStorageProvider->Close();
+
+	VolumeMutex.Unlock();
+
+	PostSaveWorld();
+
+	const auto afterSave = FDateTime::UtcNow() - beforeSave;
+
+	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
+	UE_LOG(LogTemp, Warning, TEXT("World database saved in %f ms."), afterSave.GetTotalMicroseconds()*0.001);
 }
 
 void APagedWorld::RegisterPagingComponent(UTerrainPagingComponent* pagingComponent) { pagingComponents.AddUnique(pagingComponent); }
@@ -385,6 +409,21 @@ int32 APagedWorld::getVolumeMemoryBytes() const { return VoxelVolume.Get()->calc
 
 void APagedWorld::Flush() const { VoxelVolume.Get()->flushAll(); }
 
+void APagedWorld::LaunchServer() {
+	bIsVoxelNetServer = true;
+	ConnectToDatabase("WorldDatabase");
+	VoxelNetServer_StartServer();
+}
+
+void APagedWorld::LaunchSingleplayer() {
+	bIsVoxelNetSingleplayer = true;
+	ConnectToDatabase("WorldDatabase");
+}
+
+void APagedWorld::LaunchClient(FString Host, int32 Port) {
+	VoxelNetClient_ConnectToServer(Host, Port);
+}
+
 void APagedWorld::ForceSaveWorld() {
 	PreSaveWorld();
 	VolumeMutex.Lock();
@@ -432,10 +471,10 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 		FBufferArchive region_actors(true);
 		region_actors << regionActorRecords;
 
-		WorldStorageProvider->PutRegionalData(unload, REGIONAL_DATA_ENTITY, region_actors);
+		WorldStorageProvider->PutRegionalData(unload, 0, region_actors);
 
-		//if (regionActorRecords.Num() > 0)
-		//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s data %s."), *unload.ToString(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
+		if (regionActorRecords.Num() > 0)
+		UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s %d B data: %s."), *unload.ToString(),region_actors.Num(), *BytesToHex(region_actors.GetData(),region_actors.Num()));
 	}
 }
 
@@ -443,7 +482,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 	// load actors
 	for (auto& load : Regions) {
 		TArray<uint8> region_actors;
-		if (WorldStorageProvider->GetRegionalData(load, REGIONAL_DATA_ENTITY, region_actors)) {
+		if (WorldStorageProvider->GetRegionalData(load, 0, region_actors)) {
 			TArray<FVoxelWorldActorRecord> regionActorRecords;
 
 			FMemoryReader reader(region_actors, true);
@@ -461,7 +500,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 				NewActor->Serialize(Ar);
 
 				IISavableWithRegion::Execute_OnLoaded(NewActor);
-				//UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s data %s."), *load.ToString(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
+				UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(),region_actors.Num(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
 			}
 		}
 	}
@@ -533,7 +572,8 @@ void APagedWorld::PagingComponentTick() {
 
 	for (auto& elem : toRemove) { pagingComponents.Remove(elem); }
 	toRemove.Reset();
-
+	
+	regionsToLoad.Append(ForceLoadedRegions);
 	UnloadRegionsExcept(regionsToLoad);
 }
 

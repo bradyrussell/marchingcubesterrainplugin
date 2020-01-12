@@ -15,10 +15,11 @@
 #define DB_VERSION_TAG "DB_VERSION" //
 #define DB_VERSION 2 // changes when non backwards compatible changes to the structure occur
 
-// regional data offsets, max of 255 - REGION_SIZE 
-#define REGIONAL_DATA_BUILDING 0 // store a TArray<TArray<uint8>> where each element of top level array is a serialized building
-#define REGIONAL_DATA_ENTITY 1 // store an array of actor archives with spawn information
-#define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
-#define REGIONAL_DATA_RESOURCES 3 // store dropped items
+// regional data offsets, max of 255 - REGION_SIZE
 
-#define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
+// #define REGIONAL_DATA_BUILDING 0 // store a TArray<TArray<uint8>> where each element of top level array is a serialized building
+// #define REGIONAL_DATA_ENTITY 1 // store an array of actor archives with spawn information
+// #define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
+// #define REGIONAL_DATA_RESOURCES 3 // store dropped items
+//
+// #define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
