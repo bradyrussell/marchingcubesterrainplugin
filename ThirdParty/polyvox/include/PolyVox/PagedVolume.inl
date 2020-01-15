@@ -284,20 +284,20 @@ namespace PolyVox
 			// Store the chunk at the appropriate place in out chunk array. Ideally this place is
 			// given by the hash, otherwise we do a linear search for the next available location
 			// We always expect to find a free place because we aim to keep the array only half full.
-			uint32_t iIndex = iPosisionHash;
+			uint32_t i2Index = iPosisionHash;
 			bool bInsertedSucessfully = false;
 			do
 			{
-				if (m_arrayChunks[iIndex] == nullptr)
+				if (m_arrayChunks[i2Index] == nullptr)
 				{
-					m_arrayChunks[iIndex] = std::move(std::unique_ptr< Chunk >(pChunk));
+					m_arrayChunks[i2Index] = std::move(std::unique_ptr< Chunk >(pChunk));
 					bInsertedSucessfully = true;
 					break;
 				}
 
 				iIndex++;
 				iIndex %= uChunkArraySize;
-			} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
+			} while (i2Index != iPosisionHash); // Keep searching until we get back to our start position.
 
 			// This should never really happen unless we are failing to keep our number of active chunks
 			// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
