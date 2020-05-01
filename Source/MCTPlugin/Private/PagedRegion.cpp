@@ -32,6 +32,12 @@ void APagedRegion::BeginPlay() {
 	for(auto&elem: World->TerrainMaterials) {
 		StaticProvider->SetupMaterialSlot(index++, FName(*FString::FromInt(index)), elem);
 	}
+
+	FRuntimeMeshCollisionSettings CollisionSettings;
+	CollisionSettings.bUseAsyncCooking = World->bUseAsyncCollision;
+	CollisionSettings.bUseComplexAsSimple = true;
+	
+	StaticProvider->SetCollisionSettings(CollisionSettings);
 	
 	/*RuntimeMesh = NewObject<URuntimeMeshComponent>(this, URuntimeMeshComponent::StaticClass()); //, *compName);
 	RuntimeMesh->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepWorldTransform);
@@ -55,6 +61,8 @@ void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
 void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	if (!StaticProvider) { UE_LOG(LogTemp, Error, TEXT("There is no provider when trying to render parsed.")); }
+
+	// for each LOD level in output
 	
 	for (int32 Material = 0; Material < output.section.Num(); Material++) {
 		if (output.section[Material].Indices.Num() > 0) {// fixes dhd3d resource crash 
