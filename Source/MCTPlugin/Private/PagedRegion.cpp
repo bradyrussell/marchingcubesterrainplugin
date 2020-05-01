@@ -8,45 +8,34 @@
 
 APagedRegion::APagedRegion() {
 	PrimaryActorTick.bCanEverTick = false;
-	//Scene = CreateDefaultSubobject<USceneComponent>(FName(TEXT("Root")));
-	//SetRootComponent(Scene);
+
 	bReplicates = true;
 	bAlwaysRelevant = true; // we manage our own culling
 }
 
 void APagedRegion::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
 
-APagedRegion::~APagedRegion() {}
+APagedRegion::~APagedRegion() {
+}
 
 void APagedRegion::PostInitializeComponents() { Super::PostInitializeComponents(); }
 
 void APagedRegion::BeginPlay() {
 	Super::BeginPlay();
-	
-	if(!StaticProvider)
-	StaticProvider = NewObject<URuntimeMeshProviderStatic>(this, TEXT("RuntimeMeshProvider-Static"));
+
+	if (!StaticProvider)
+		StaticProvider = NewObject<URuntimeMeshProviderStatic>(this, TEXT("RuntimeMeshProvider-Static"));
 
 	GetRuntimeMeshComponent()->Initialize(StaticProvider);
 
-	int index = 0;
-	for(auto&elem: World->TerrainMaterials) {
-		StaticProvider->SetupMaterialSlot(index++, FName(*FString::FromInt(index)), elem);
-	}
+	for (int i = 0; i < World->TerrainMaterials.Num(); i++) { StaticProvider->SetupMaterialSlot(i, FName(*FString::FromInt(i)), World->TerrainMaterials[i]); }
 
 	FRuntimeMeshCollisionSettings CollisionSettings;
 	CollisionSettings.bUseAsyncCooking = World->bUseAsyncCollision;
 	CollisionSettings.bUseComplexAsSimple = true;
-	
-	StaticProvider->SetCollisionSettings(CollisionSettings);
-	
-	/*RuntimeMesh = NewObject<URuntimeMeshComponent>(this, URuntimeMeshComponent::StaticClass()); //, *compName);
-	RuntimeMesh->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepWorldTransform);
-	RuntimeMesh->BodyInstance.SetResponseToAllChannels(ECR_Block);
 
-	/// DISABLING THIS STOPS THE NAN ERROR IN EDITOR. 
-	//RuntimeMesh->SetCollisionUseAsyncCooking(World->bUseAsyncCollision); // this gave more performance gains than all the render queues as far as i can tell
-	RuntimeMesh->RegisterComponent(); // NAN error happens on this call*/
-	
+	StaticProvider->SetCollisionSettings(CollisionSettings);
+
 	//this is meant to allow the regions map to be replicated
 	if (World)
 		if (!World->bIsVoxelNetServer) { World->regions.Add(FIntVector(GetRegionLocation()), this); }
@@ -63,47 +52,31 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	if (!StaticProvider) { UE_LOG(LogTemp, Error, TEXT("There is no provider when trying to render parsed.")); }
 
 	// for each LOD level in output
-	
-	for (int32 Material = 0; Material < output.section.Num(); Material++) {
-		if (output.section[Material].Indices.Num() > 0) {// fixes dhd3d resource crash 
-			//FRuntimeMeshDataPtr Data = RuntimeMesh->GetOrCreateRuntimeMesh()->GetRuntimeMeshData();
-			//Data->EnterSerializedMode();
 
+	for (int32 Material = 0; Material < output.section.Num(); Material++) {
+		if (output.section[Material].Indices.Num() > 0) {
 			if (!bSectionExists[Material]) {
-				//Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
-				               //         output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true
-				
-				StaticProvider->CreateSectionFromComponents(0, Material, Material, output.section[Material].Vertices,output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
-				                        output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
-				//RuntimeMesh->SetMaterial(Material, World->TerrainMaterials[Material]); // as far as i can tell not necessary on updates
+				StaticProvider->CreateSectionFromComponents(0, Material, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
+				                                            output.section[Material].UV0,
+				                                            output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
+
 				bSectionExists[Material] = true;
 			}
 			else {
-				StaticProvider->UpdateSectionFromComponents(0, Material, output.section[Material].Vertices,output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
-				                        output.section[Material].Colors, output.section[Material].Tangents);
-				
-				// Data->UpdateMeshSection(Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals, output.section[Material].UV0,
-				//                         output.section[Material].Colors, output.section[Material].Tangents);
-			}
+				StaticProvider->UpdateSectionFromComponents(0, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
+				                                            output.section[Material].UV0,
+				                                            output.section[Material].Colors, output.section[Material].Tangents);
 
-			//auto Section = Data->BeginSectionUpdate(Material); // must be called every update
-			//Section->Commit();
+				StaticProvider->MarkCollisionDirty();
+			}
 		}
 		else {
-			StaticProvider->ClearSection(0,Material);
-			//RuntimeMesh->ClearMeshSection(Material); // fixes not being able to remove last polys of a material from a region
+			StaticProvider->ClearSection(0, Material);
+
 			bSectionExists[Material] = false;
 		}
 	}
 
-	//StaticProvider
-
-
-	
-	/*// maybe the nan error is because this creates the mesh?
-	if(RuntimeMesh->IsCollisionUsingAsyncCooking() != World->bUseAsyncCollision) {
-		RuntimeMesh->SetCollisionUseAsyncCooking(World->bUseAsyncCollision);
-	}*/
 }
 
 void APagedRegion::UpdateNavigation() const { FNavigationSystem::UpdateComponentData(*GetRuntimeMeshComponent()); }
