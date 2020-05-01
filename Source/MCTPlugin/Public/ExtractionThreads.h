@@ -75,7 +75,7 @@ namespace ExtractionThreads {
 
 			//output.decoded = DecodedMesh;
 
-			FVector OffsetLocation = FVector(lower);
+			//FVector OffsetLocation = FVector(0,0,0);//FVector(lower);
 
 			if (decoded.getNoOfIndices() == 0)
 				return;
@@ -94,22 +94,19 @@ namespace ExtractionThreads {
 						// If it is of the same material, then we need to add the correct indices now
 						output.section[Material].Indices.Add(
 							output.section[Material].Vertices.Add(
-								(FPolyVoxVector(Vertex2.position) +
-									OffsetLocation) * VOXEL_SIZE));
+								(FPolyVoxVector(Vertex2.position) ) * VOXEL_SIZE));
 
 						Index = decoded.getIndex(i + 1);
 						auto Vertex1 = decoded.getVertex(Index);
 						output.section[Material].Indices.Add(
 							output.section[Material].Vertices.Add(
-								(FPolyVoxVector(Vertex1.position) +
-									OffsetLocation) * VOXEL_SIZE));
+								(FPolyVoxVector(Vertex1.position)) * VOXEL_SIZE));
 
 						Index = decoded.getIndex(i);
 						auto Vertex0 = decoded.getVertex(Index);
 						output.section[Material].Indices.Add(
 							output.section[Material].Vertices.Add(
-								(FPolyVoxVector(Vertex0.position) +
-									OffsetLocation) * VOXEL_SIZE));
+								(FPolyVoxVector(Vertex0.position)) * VOXEL_SIZE));
 
 						// Calculate the tangents of our triangle
 						const FVector Edge01 = FPolyVoxVector(Vertex1.position - Vertex0.position);
