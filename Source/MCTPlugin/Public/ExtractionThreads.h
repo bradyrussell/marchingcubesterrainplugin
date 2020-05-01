@@ -75,7 +75,7 @@ namespace ExtractionThreads {
 
 			//output.decoded = DecodedMesh;
 
-			FVector OffsetLocation = FVector(lower);
+			FVector OffsetLocation = FVector(0,0,0);//FVector(lower);
 
 			if (decoded.getNoOfIndices() == 0)
 				return;
