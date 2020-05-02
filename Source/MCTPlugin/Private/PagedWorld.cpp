@@ -34,13 +34,14 @@ APagedWorld::~APagedWorld() {
 void APagedWorld::BeginPlay() {
 	Super::BeginPlay();
 	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
-	//VoxelWorldThreadPool->Create(FPlatformMisc::NumberOfCoresIncludingHyperthreads(), 256 * 1024);
-	VoxelWorldThreadPool->Create(4, 256 * 1024); // todo revert after testing
 
-	//if(bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		//WorldGenerationProvider = new WorldGeneratorPlains(GetNoiseGeneratorArray());
-		//UE_LOG(LogTemp, Warning, TEXT("Initialized worldgen with %d noise generators."), WorldGenerationProvider->NoiseGenerators.Num())
-	//}
+	const int32 NUMBER_OF_POOLS = 1;
+	const int32 NumCoresPerPool = bShareCores ? FPlatformMisc::NumberOfCoresIncludingHyperthreads() : FPlatformMisc::NumberOfCoresIncludingHyperthreads() / NUMBER_OF_POOLS;
+	
+	VoxelWorldThreadPool->Create(NumCoresPerPool, 256 * 1024); // thread pool for extraction and worldgen tasks
+	
+	//URuntimeMesh::InitializeMultiThreading(NumCoresPerPool); // thread pool for RMC //// currently runs stuff that throws a check (IsInGameThread()) so useless
+
 }
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) {

@@ -67,7 +67,7 @@ namespace VoxelNetThreads {
 				KeepAlive();
 				if (socket->HasPendingData(size)) {
 					FArrayReader opcodeBuffer(true);
-					opcodeBuffer.Init(0, BUFFER_SIZE); // todo wouldnt it be beteer to resuse the same buffer??
+					opcodeBuffer.Init(0, BUFFER_SIZE); // todo wouldnt it be better to resuse the same buffer??
 
 					int32 BytesRead = 0;
 

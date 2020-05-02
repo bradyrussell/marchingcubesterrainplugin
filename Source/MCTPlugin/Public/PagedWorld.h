@@ -56,12 +56,17 @@ protected:
 
 	bool bHasStarted = false;
 	bool bHasShutdown = false;
+	
+
 
 public:
 	void Tick(float DeltaTime) override;
 	//debug
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
 
+	// if true, creates CORE_COUNT threads per pool, if false CORE_COUNT / POOL_NUM per pool
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bShareCores; // dont know which would be faster
+	
 	FQueuedThreadPool *VoxelWorldThreadPool;
 	
 	/* World */
