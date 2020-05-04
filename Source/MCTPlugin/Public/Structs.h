@@ -132,20 +132,42 @@ USTRUCT(BlueprintType)
      }
  };
 
+
+
+USTRUCT()
+ struct FVoxelWorldComponentRecord {
+	GENERATED_USTRUCT_BODY()
+	
+	FString ComponentClass;
+	FTransform ComponentTransform;
+	TArray<uint8> ComponentData;
+	bool bSpawnIfNotFound;
+
+		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldComponentRecord& Record){
+		Ar << Record.ComponentClass;
+		Ar << Record.ComponentTransform;
+		Ar << Record.ComponentData;
+		Ar << Record.bSpawnIfNotFound;
+		return Ar;
+	}
+	
+ };
+
 USTRUCT()
  struct FVoxelWorldActorRecord {
 	GENERATED_USTRUCT_BODY()
 	
 	FString ActorClass;
 	FTransform ActorTransform;
+	TArray<FVoxelWorldComponentRecord> ActorComponents;
 	TArray<uint8> ActorData;
 
 		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldActorRecord& Record){
 		Ar << Record.ActorClass;
 		Ar << Record.ActorTransform;
+		Ar << Record.ActorComponents;
 		Ar << Record.ActorData;
 		return Ar;
 	}
 	
  };
-
