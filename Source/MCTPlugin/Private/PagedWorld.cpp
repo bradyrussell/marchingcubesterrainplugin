@@ -15,6 +15,7 @@
 #include "Async/Async.h"
 #include "WorldGeneratorPlains.h"
 #include "StorageProviderNull.h"
+#include "ISavableComponent.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -440,6 +441,8 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 	for (auto& unload : Regions) {
 		TArray<AActor*> saved;
 		TArray<FVoxelWorldActorRecord> regionActorRecords;
+
+		int32 actorCount = 0;
 		for (auto& elem : outActors) {
 			const FTransform Transform = IISavableWithRegion::Execute_GetSaveTransform(elem);
 			const FIntVector saveRegion = VoxelToRegionCoords(WorldToVoxelCoords(Transform.GetLocation()));
@@ -450,6 +453,42 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 				record.ActorClass = elem->GetClass()->GetPathName();
 				record.ActorTransform = Transform;
 
+				//////////////////////////////////
+				// save components
+
+				auto Components = elem->GetComponentsByInterface(UISavableComponent::StaticClass());
+				for (auto& comp : Components) {
+					IISavableComponent::Execute_OnPreSave(comp);
+					FVoxelWorldComponentRecord compRecord;
+
+					compRecord.ComponentClass = comp->GetClass()->GetPathName();
+					compRecord.bSpawnIfNotFound = IISavableComponent::Execute_GetSpawnIfNotFound(comp);
+
+					USceneComponent* SceneComp = Cast<USceneComponent>(comp);
+					if(SceneComp) {
+						compRecord.ComponentTransform = SceneComp->GetRelativeTransform();
+					}
+
+					FMemoryWriter writer(compRecord.ComponentData, true);
+					FVoxelWorldSaveGameArchive proxy(writer);
+
+					comp->Serialize(proxy);
+
+					proxy.Flush();
+					proxy.Close();
+					writer.Flush();
+					writer.Close();
+
+					record.ActorComponents.Add(compRecord);
+					
+					IISavableComponent::Execute_OnSaved(comp);
+
+					UE_LOG(LogTemp, Warning, TEXT("[db] Saved component %s, %d B data: %s."), *comp->GetReadableName(), compRecord.ComponentData.Num(), *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
+					
+				}
+				
+				//////////////////////////////////
+				
 				FMemoryWriter writer(record.ActorData, true);
 				FVoxelWorldSaveGameArchive proxy(writer);
 
@@ -464,7 +503,11 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 				saved.Add(elem);
 
 				IISavableWithRegion::Execute_OnSaved(elem);
+				actorCount++;
+				UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s actor %s."), *unload.ToString(),*elem->GetHumanReadableName());
+				
 				elem->Destroy();
+				
 			}
 		}
 		outActors.RemoveAll([saved](AActor* a) { return saved.Contains(a); });
@@ -475,7 +518,7 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 		WorldStorageProvider->PutRegionalData(unload, 0, region_actors);
 
 		if (regionActorRecords.Num() > 0)
-		UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s %d B data: %s."), *unload.ToString(),region_actors.Num(), *BytesToHex(region_actors.GetData(),region_actors.Num()));
+		UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s, %d actors, %d B data: %s."), *unload.ToString(), actorCount, region_actors.Num(), *BytesToHex(region_actors.GetData(),region_actors.Num()));
 	}
 }
 
@@ -497,14 +540,77 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 				if(!recordClass || !IsValid(recordClass)) {
 					UE_LOG(LogTemp,Warning, TEXT("[db] ERROR LOADING Class %s from region saved actors! Class is null!"), *record.ActorClass);
 				} else {
-					AActor* NewActor = GetWorld()->SpawnActor<AActor>(recordClass, record.ActorTransform.GetLocation(), record.ActorTransform.GetRotation().Rotator(), params);
+					AActor* NewActor = GetWorld()->SpawnActorDeferred<AActor>(recordClass, record.ActorTransform,nullptr,nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 
-					FMemoryReader MemoryReader(record.ActorData, true);
-					FVoxelWorldSaveGameArchive Ar(MemoryReader);
-					NewActor->Serialize(Ar);
+					if(NewActor){
+						FMemoryReader MemoryReader(record.ActorData, true);
+						FVoxelWorldSaveGameArchive Ar(MemoryReader);
+						NewActor->Serialize(Ar);
 
-					IISavableWithRegion::Execute_OnLoaded(NewActor);
-					UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(),region_actors.Num(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
+						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
+						////
+						//////////////////
+						/// do components
+						///
+						
+						TSet<UActorComponent*> processedComps;
+
+						UE_LOG(LogTemp,Warning, TEXT("[db] There are %d component records on this actor %s"),record.ActorComponents.Num(),*NewActor->GetHumanReadableName());
+						
+						for(auto& compRecord:record.ActorComponents) {
+							UClass* compClass = FindObject<UClass>(ANY_PACKAGE, *compRecord.ComponentClass);
+
+							if(!compClass || !IsValid(compClass)) {
+								UE_LOG(LogTemp,Warning, TEXT("[db] ERROR LOADING Component Class %s from region saved actors! Class is null!"), *compRecord.ComponentClass);
+								continue;
+							}
+							
+							TArray<UActorComponent*> outComps;
+							NewActor->GetComponents(compClass, outComps);
+
+							UE_LOG(LogTemp,Warning, TEXT("[db] There are %d components on actor %s"), outComps.Num(), *NewActor->GetHumanReadableName());
+							
+							UActorComponent* currentComp = nullptr;
+							
+							for(auto&elem:outComps) { // search for an unseen comp of the proper class
+								if(!processedComps.Contains(elem)) {
+									currentComp = elem;
+									processedComps.Add(elem);
+								}
+							}
+
+							if(!currentComp) {
+								UE_LOG(LogTemp,Warning, TEXT("[db] Failed to find component %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
+								if(compRecord.bSpawnIfNotFound) {
+									// spawn it
+								} else {
+									continue;
+								}
+							}
+
+							if(currentComp) {
+								UE_LOG(LogTemp, Warning, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass,compRecord.ComponentData.Num(),*BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
+								
+								USceneComponent* SceneComp = Cast<USceneComponent>(currentComp);
+								if(SceneComp) {
+									SceneComp->SetRelativeTransform(compRecord.ComponentTransform);
+								}
+								
+								FMemoryReader compMemoryReader(compRecord.ComponentData, true);
+								FVoxelWorldSaveGameArchive compAr(compMemoryReader);
+								currentComp->Serialize(compAr);
+								UE_LOG(LogTemp,Warning, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
+							}
+						}
+						
+						/////////////////
+						
+						////
+						IISavableWithRegion::Execute_OnLoaded(NewActor);
+						UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(),region_actors.Num(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
+					} else {
+						UE_LOG(LogTemp,Warning, TEXT("[db] ERROR LOADING Class %s from region saved actors! Failed to spawn at %s!"), *record.ActorClass, *record.ActorTransform.ToHumanReadableString());
+					}
 				}
 
 			}

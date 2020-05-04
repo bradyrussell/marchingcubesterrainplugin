@@ -165,7 +165,7 @@ int StorageProviderBase::GetDatabaseFormat() {
 
 bool StorageProviderBase::SetDatabaseFormat(int Format) {
 	char buf[16];
-	_itoa(Format, buf, 10);
+	_itoa_s(Format, buf, 10);
 	return Put(DB_VERSION_TAG, buf);
 }
 
