@@ -79,7 +79,7 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Basic(int32 x, int32 y, int32
 	return Voxel;
 }
 
-PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height, float _caves, float _ore) {
+PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height, float _caves, float _ore, int32 density) {
 	PolyVox::MaterialDensityPair88 Voxel;
 	
 	if (z < (_height + 4) && (_caves > 1)) {
@@ -90,7 +90,7 @@ PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height,
 	//}
 
 	if (z + 8 > _height) {
-		return PolyVox::MaterialDensityPair88(MATERIAL_DIRT, 255);
+		return PolyVox::MaterialDensityPair88(MATERIAL_DIRT, density);
 	}
 
 	if(_ore > .7) {
@@ -121,7 +121,9 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 
 		return PolyVox::MaterialDensityPair88();
 	}
 
-	auto _height = noise[0]->GetNoise2D(x, y);
+	float totalHeight = noise[0]->GetNoise2D(x, y);
+	int32 _height = totalHeight;
+	int32 _density = FMath::FloorToInt(FMath::Abs(totalHeight - _height) * 128.f)+128; // converts the fractional part of the height to a range 128-255
 	//only evaluate noise when you will need it; its expensive. aka return as soon as possible
 
 	if (z > _height) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
@@ -139,12 +141,13 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 
 
 		switch (_biome) { 
 
-			case MOUNTAINS: return Interpret_Biome_Mountains(z, _height, _caves, _ore);
+			case MOUNTAINS: return Interpret_Biome_Mountains(z, _height, _caves, _ore, _density);
 			default: return PolyVox::MaterialDensityPair88(0,0);
 		}
 	}
 
 }
+
 
 EBiome WorldGen::Interpret_Biome(float _height, float temperatue, float moisture) {
 	//if(_height > 64) return MOUNTAINS;

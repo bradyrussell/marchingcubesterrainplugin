@@ -238,10 +238,10 @@ void APagedWorld::Tick(float DeltaTime) {
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		bHasStarted = true;
-		//WorldStorageProvider = new StorageProviderLevelDB(true);
+		WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
 		//WorldStorageProvider = new StorageProviderTMap(true);
-		WorldStorageProvider = new StorageProviderNull();
+		//WorldStorageProvider = new StorageProviderNull();
 
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
@@ -494,14 +494,19 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 
 				UClass* recordClass = FindObject<UClass>(ANY_PACKAGE, *record.ActorClass);
 
-				AActor* NewActor = GetWorld()->SpawnActor<AActor>(recordClass, record.ActorTransform.GetLocation(), record.ActorTransform.GetRotation().Rotator(), params);
+				if(!recordClass || !IsValid(recordClass)) {
+					UE_LOG(LogTemp,Warning, TEXT("[db] ERROR LOADING Class %s from region saved actors! Class is null!"), *record.ActorClass);
+				} else {
+					AActor* NewActor = GetWorld()->SpawnActor<AActor>(recordClass, record.ActorTransform.GetLocation(), record.ActorTransform.GetRotation().Rotator(), params);
 
-				FMemoryReader MemoryReader(record.ActorData, true);
-				FVoxelWorldSaveGameArchive Ar(MemoryReader);
-				NewActor->Serialize(Ar);
+					FMemoryReader MemoryReader(record.ActorData, true);
+					FVoxelWorldSaveGameArchive Ar(MemoryReader);
+					NewActor->Serialize(Ar);
 
-				IISavableWithRegion::Execute_OnLoaded(NewActor);
-				UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(),region_actors.Num(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
+					IISavableWithRegion::Execute_OnLoaded(NewActor);
+					UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(),region_actors.Num(),*BytesToHex(region_actors.GetData(),region_actors.Num()));
+				}
+
 			}
 		}
 	}
