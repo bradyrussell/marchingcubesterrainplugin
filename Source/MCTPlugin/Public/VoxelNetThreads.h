@@ -1,5 +1,5 @@
 #pragma once
-
+#include "MCTPlugin.h"
 #include "Sockets.h"
 #include "Networking/Public/Interfaces/IPv4/IPv4Endpoint.h"
 #include "VoxelNetPackets.h"
@@ -39,7 +39,7 @@ namespace VoxelNetThreads {
 					Packet::MakeKeepAlive(keepalive);
 					socket->Send(keepalive.GetData(), keepalive.Num(), BytesSent);
 					Updated();
-					//UE_LOG(LogTemp, Warning, TEXT("Client: Sent keepalive packet. "));
+					//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Sent keepalive packet. "));
 				}
 			}
 		}
@@ -50,7 +50,7 @@ namespace VoxelNetThreads {
 			Packet::MakeDisconnect(disconnect);
 			socket->Send(disconnect.GetData(), disconnect.Num(), BytesSent);
 			Updated();
-			UE_LOG(LogTemp, Warning, TEXT("Client: Sent disconnect packet. "));
+			UE_LOG(LogVoxelNet, Warning, TEXT("Client: Sent disconnect packet. "));
 		}
 
 		////// runnable api ///////////
@@ -74,7 +74,7 @@ namespace VoxelNetThreads {
 					if (socket->Recv(opcodeBuffer.GetData(), 1, BytesRead)) {
 						if (opcodeBuffer[0] == 0x0) {
 							// do nothing
-							//UE_LOG(LogTemp, Warning, TEXT("Client: Received keepalive. "));
+							//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received keepalive. "));
 						}
 						else if (opcodeBuffer[0] == 0x1) {
 							// handshake
@@ -85,7 +85,7 @@ namespace VoxelNetThreads {
 								opcodeBuffer << version;
 								opcodeBuffer << cookie;
 								handshakes.Enqueue(cookie);
-								UE_LOG(LogTemp, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %llu"), version, cookie);
+								UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %llu"), version, cookie);
 							}
 						}
 						else if (opcodeBuffer[0] == 0x3) {
@@ -98,7 +98,7 @@ namespace VoxelNetThreads {
 								opcodeBuffer << regions;
 
 								remainingRegionsToDownload += regions;
-								//UE_LOG(LogTemp, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
+								//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received region count. Expect %d regions to follow."),  regions);
 
 							}
 						}
@@ -113,7 +113,7 @@ namespace VoxelNetThreads {
 								copy << opcode;
 								copy << dataSize;
 
-							//UE_LOG(LogTemp, Warning, TEXT("Client: Received region response with a compressed size of %d. "), dataSize);
+							//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received region response with a compressed size of %d. "), dataSize);
 
 								uint32 availableSize = 0;
 
@@ -123,12 +123,12 @@ namespace VoxelNetThreads {
 									if (!running)
 										return 0;
 									FPlatformProcess::Sleep(SOCKET_DELAY);
-									UE_LOG(LogTemp, Warning, TEXT("Client: Waiting for the rest of the region data... %d / %d"), availableSize, dataSize);
+									UE_LOG(LogVoxelNet, Warning, TEXT("Client: Waiting for the rest of the region data... %d / %d"), availableSize, dataSize);
 								}
 
 								if (socket->Recv(opcodeBuffer.GetData() + 5, FMath::Min((int32)dataSize, BUFFER_SIZE), BytesRead)) {
 									remainingRegionsToDownload--;
-									//UE_LOG(LogTemp, Warning, TEXT("Client: Finished reading compressed chunk received %d bytes out of %d. Remaining regions: %d"), BytesRead, dataSize, remainingRegionsToDownload);
+									//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Finished reading compressed chunk received %d bytes out of %d. Remaining regions: %d"), BytesRead, dataSize, remainingRegionsToDownload);
 
 									Packet::RegionData data;
 									Packet::ParseRegionResponse(opcodeBuffer, data);
@@ -139,12 +139,12 @@ namespace VoxelNetThreads {
 						}
 						else if (opcodeBuffer[0] == 0x5) {
 							// disconnect packet
-							UE_LOG(LogTemp, Warning, TEXT("Client: Received disconnect packet. "));
+							UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received disconnect packet. "));
 							//Disconnect();
 							return 5;
 						}
 						else {
-							UE_LOG(LogTemp, Warning, TEXT("Client: Disconnecting due to invalid opcode: %#04x"), opcodeBuffer[0]);
+							UE_LOG(LogVoxelNet, Warning, TEXT("Client: Disconnecting due to invalid opcode: %#04x"), opcodeBuffer[0]);
 							//Disconnect();
 							return -opcodeBuffer[0];
 						}
@@ -194,7 +194,7 @@ namespace VoxelNetThreads {
 			int32 BytesSent = 0;
 			Packet::MakeDisconnect(disconnect);
 			socket->Send(disconnect.GetData(), disconnect.Num(), BytesSent);
-			UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent disconnect packet. "), *endpoint.ToString());
+			UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Sent disconnect packet. "), *endpoint.ToString());
 		}
 
 		void SendRegionNumber(int32 regions) const {
@@ -220,7 +220,7 @@ namespace VoxelNetThreads {
 			socket->Send(handshake.GetData(), handshake.Num(), sent);
 			Updated();
 
-			UE_LOG(LogTemp, Warning, TEXT("Server to %s: Sent handshake. %d bytes. Protocol version: %d, cookie: %llu"), *endpoint.ToString(), sent, PROTOCOL_VERSION, cookie);
+			UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Sent handshake. %d bytes. Protocol version: %d, cookie: %llu"), *endpoint.ToString(), sent, PROTOCOL_VERSION, cookie);
 
 			// handshake accepted
 			while (running && lastUpdate + FTimespan::FromSeconds(SOCKET_TIMEOUT) >= FDateTime::Now()) {
@@ -234,7 +234,7 @@ namespace VoxelNetThreads {
 						socket->Send(elem.GetData(), elem.Num(), BytesSent);
 						BytesTotal += BytesSent;
 					}
-					UE_LOG(LogTemp, Warning, TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
+					UE_LOG(LogVoxelNet, Verbose, TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
 					//FPlatformProcess::Sleep(SOCKET_DELAY); // todo see how changing this affects client
 				}
 				
@@ -260,22 +260,22 @@ namespace VoxelNetThreads {
 						}
 						else if (opcodeBuffer[0] == 0x5) {
 							// disconnect packet
-							UE_LOG(LogTemp, Warning, TEXT("Server to %s: Received disconnect packet. "), *endpoint.ToString());
+							UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Received disconnect packet. "), *endpoint.ToString());
 							return 5;
 						}
 						else {
-							UE_LOG(LogTemp, Warning, TEXT("Server to %s: Disconnecting %s due to invalid opcode: %#04x"), *endpoint.ToString(), *endpoint.ToString(), opcodeBuffer[0]);
+							UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Disconnecting %s due to invalid opcode: %#04x"), *endpoint.ToString(), *endpoint.ToString(), opcodeBuffer[0]);
 							return -opcodeBuffer[0];
 						}
 					}
 				}
 			}
 			if (lastUpdate + FTimespan::FromSeconds(SOCKET_TIMEOUT) < FDateTime::Now()) {
-				UE_LOG(LogTemp, Warning, TEXT("Server to %s: Disconnecting %s due to timeout. "), *endpoint.ToString(), *endpoint.ToString());
+				UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Disconnecting %s due to timeout. "), *endpoint.ToString(), *endpoint.ToString());
 				return 1;
 			}
 			else {
-				UE_LOG(LogTemp, Warning, TEXT("Server to %s: Disconnecting %s due to request. "), *endpoint.ToString(), *endpoint.ToString());
+				UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Disconnecting %s due to request. "), *endpoint.ToString(), *endpoint.ToString());
 				return 0;
 			}
 		}
