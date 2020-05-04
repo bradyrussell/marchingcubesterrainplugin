@@ -109,8 +109,8 @@ public:
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SaveAllDataForRegions(TSet<FIntVector> Regions);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void LoadAllDataForRegions(TSet<FIntVector> Regions);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SavePlayerActor(FString Identifier, AActor* ActorToSerialize);
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadPlayerActor(FString Identifier, AActor* ExistingActor, bool bSetTransform);
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadAndSpawnPlayerActor(FString Identifier, AActor* OutSpawnedActor);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadPlayerActor(FString Identifier, AActor* ExistingActor, bool bSetTransform, FTransform& OutTransform);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawnedActor);
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPostSaveWorld PostSaveWorld_Event;
 

@@ -710,7 +710,7 @@ void APagedWorld::SavePlayerActor(FString Identifier, AActor* ActorToSerialize) 
 	}
 }
 
-bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, bool bSetTransform) {
+bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, bool bSetTransform, FTransform& OutTransform) {
 	TArray<uint8> playerSave;
 
 	if (WorldStorageProvider->GetGlobalData("PLAYER_" + std::string(TCHAR_TO_UTF8(*Identifier)), playerSave)) {
@@ -732,6 +732,8 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 				FVoxelWorldSaveGameArchive Ar(MemoryReader);
 				ExistingActor->Serialize(Ar);
 
+				OutTransform = record.ActorTransform;
+				
 				if(bSetTransform) {
 					ExistingActor->SetActorTransform(record.ActorTransform);
 				}
@@ -809,7 +811,7 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 	else { return false; }
 }
 
-bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor* OutSpawnedActor) {
+bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawnedActor) {
 	TArray<uint8> playerSave;
 
 	if (WorldStorageProvider->GetGlobalData("PLAYER_" + std::string(TCHAR_TO_UTF8(*Identifier)), playerSave)) {
