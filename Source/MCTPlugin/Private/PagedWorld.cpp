@@ -16,6 +16,7 @@
 #include "WorldGeneratorPlains.h"
 #include "StorageProviderNull.h"
 #include "ISavableComponent.h"
+#include "MCTPlugin.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -72,7 +73,7 @@ void APagedWorld::VoxelUpdatesTick() {
 			}
 		}
 		catch (...) {
-			UE_LOG(LogTemp, Error, TEXT("Caught exception in voxelUpdateQueue processing."));
+			UE_LOG(LogVoxelWorld, Error, TEXT("Caught exception in voxelUpdateQueue processing."));
 			continue;
 		}
 	}
@@ -273,12 +274,12 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
-		UE_LOG(LogTemp, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
+		UE_LOG(LogVoxelDatabase, Warning, TEXT("Database connection to %hs using provider %hs: %s"), WorldStorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*Name)).c_str(),
 		       WorldStorageProvider->GetProviderName(), status ? TEXT("Success") : TEXT("Failure"));
 
 		const auto compatible = WorldStorageProvider->VerifyDatabaseFormat(DB_VERSION);
 
-		UE_LOG(LogTemp, Warning, TEXT("Database version for %s. %s."), *Name, compatible? TEXT("Version is compatible.") : TEXT("Version is NOT compatible! Cannot load data."));
+		UE_LOG(LogVoxelDatabase, Warning, TEXT("Database version for %s. %s."), *Name, compatible? TEXT("Version is compatible.") : TEXT("Version is NOT compatible! Cannot load data."));
 		ensure(compatible);
 	}
 }
@@ -302,7 +303,7 @@ void APagedWorld::SaveAndShutdown() {
 	VoxelWorldThreadPool->Destroy();
 
 	if (bIsVoxelNetServer) {
-		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet server..."));
+		UE_LOG(LogVoxelNet, Warning, TEXT("Stopping VoxelNet server..."));
 		for (auto& elem : VoxelNetServer_ServerThreads) {
 			if (elem)
 				elem->Kill(true);
@@ -311,27 +312,27 @@ void APagedWorld::SaveAndShutdown() {
 		if (VoxelNetServer_ServerListener.IsValid())
 			VoxelNetServer_ServerListener.Get()->Stop();
 		VoxelNetServer_ServerListener.Reset();
-		UE_LOG(LogTemp, Warning, TEXT("VoxelNet server has stopped."));
+		UE_LOG(LogVoxelNet, Warning, TEXT("VoxelNet server has stopped."));
 	}
 	else if (!bIsVoxelNetSingleplayer) {
-		UE_LOG(LogTemp, Warning, TEXT("Stopping VoxelNet client..."));
+		UE_LOG(LogVoxelNet, Warning, TEXT("Stopping VoxelNet client..."));
 		if (VoxelNetClient_ClientThread)
 			VoxelNetClient_ClientThread->Kill(true);
 		VoxelNetClient_VoxelClient.Reset();
-		UE_LOG(LogTemp, Warning, TEXT("VoxelNet client has stopped."));
+		UE_LOG(LogVoxelNet, Warning, TEXT("VoxelNet client has stopped."));
 	}
 
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
-	UE_LOG(LogTemp, Warning, TEXT("Saving and disconnecting world database..."));
+	UE_LOG(LogVoxelDatabase, Warning, TEXT("Saving and disconnecting world database..."));
 
 	const auto beforeSave = FDateTime::UtcNow();
 
 	PreSaveWorld();
 
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
-		UE_LOG(LogTemp, Warning, TEXT("Saving data for regions..."));
+		UE_LOG(LogVoxelDatabase, Warning, TEXT("Saving data for regions..."));
 		UnloadRegionsExcept(TSet<FIntVector>()); // force save all entities
-		UE_LOG(LogTemp, Warning, TEXT("Regional data saved."));
+		UE_LOG(LogVoxelDatabase, Warning, TEXT("Regional data saved."));
 	}
 
 	VolumeMutex.Lock();
@@ -348,7 +349,7 @@ void APagedWorld::SaveAndShutdown() {
 	const auto afterSave = FDateTime::UtcNow() - beforeSave;
 
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer)
-	UE_LOG(LogTemp, Warning, TEXT("World database saved in %f ms."), afterSave.GetTotalMicroseconds()*0.001);
+	UE_LOG(LogVoxelDatabase, Warning, TEXT("World database saved in %f ms."), afterSave.GetTotalMicroseconds()*0.001);
 }
 
 void APagedWorld::RegisterPagingComponent(UTerrainPagingComponent* pagingComponent) { pagingComponents.AddUnique(pagingComponent); }
@@ -358,7 +359,7 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 		return regions.FindRef(pos);
 
 	if (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer) {
-		UE_LOG(LogTemp, Verbose, TEXT("Client tried to access nonexistant region %s."), *pos.ToString());
+		UE_LOG(LogVoxelWorld, Warning, TEXT("Client tried to access nonexistant region %s."), *pos.ToString());
 		return nullptr;
 	}
 
@@ -375,7 +376,7 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 		return region;
 	}
 	catch (...) {
-		UE_LOG(LogTemp, Warning, TEXT("Exception spawning a new region actor at %s."), *pos.ToString());
+		UE_LOG(LogVoxelWorld, Error, TEXT("Exception spawning a new region actor at %s."), *pos.ToString());
 		return nullptr;
 	}
 }
@@ -507,7 +508,7 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 
 					IISavableComponent::Execute_OnSaved(comp);
 
-					UE_LOG(LogTemp, Warning, TEXT("[db] Saved component %s, %d B data: %s."), *comp->GetReadableName(), compRecord.ComponentData.Num(),
+					UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Saved component %s, %d B data: %s."), *comp->GetReadableName(), compRecord.ComponentData.Num(),
 					       *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
 				}
 
@@ -528,7 +529,7 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 
 				IISavableWithRegion::Execute_OnSaved(elem);
 				actorCount++;
-				UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s actor %s."), *unload.ToString(), *elem->GetHumanReadableName());
+				UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Saved region %s actor %s."), *unload.ToString(), *elem->GetHumanReadableName());
 
 				elem->Destroy();
 			}
@@ -541,7 +542,7 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 		WorldStorageProvider->PutRegionalData(unload, 0, region_actors);
 
 		if (regionActorRecords.Num() > 0)
-		UE_LOG(LogTemp, Warning, TEXT("[db] Saved region %s, %d actors, %d B data: %s."), *unload.ToString(), actorCount, region_actors.Num(),
+		UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Saved region %s, %d actors, %d B data: %s."), *unload.ToString(), actorCount, region_actors.Num(),
 		       *BytesToHex(region_actors.GetData(),region_actors.Num()));
 	}
 }
@@ -578,20 +579,20 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 
 						TSet<UActorComponent*> processedComps;
 
-						UE_LOG(LogTemp, Warning, TEXT("[db] There are %d component records on this actor %s"), record.ActorComponents.Num(), *NewActor->GetHumanReadableName());
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d component records on this actor %s"), record.ActorComponents.Num(), *NewActor->GetHumanReadableName());
 
 						for (auto& compRecord : record.ActorComponents) {
 							UClass* compClass = FindObject<UClass>(ANY_PACKAGE, *compRecord.ComponentClass);
 
 							if (!compClass || !IsValid(compClass)) {
-								UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Component Class %s from region saved actors! Class is null!"), *compRecord.ComponentClass);
+								UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Component Class %s from region saved actors! Class is null!"), *compRecord.ComponentClass);
 								continue;
 							}
 
 							TArray<UActorComponent*> outComps;
 							NewActor->GetComponents(compClass, outComps);
 
-							UE_LOG(LogTemp, Warning, TEXT("[db] There are %d components on actor %s"), outComps.Num(), *NewActor->GetHumanReadableName());
+							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d components on actor %s"), outComps.Num(), *NewActor->GetHumanReadableName());
 
 							UActorComponent* currentComp = nullptr;
 
@@ -604,7 +605,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 							}
 
 							if (!currentComp) {
-								UE_LOG(LogTemp, Warning, TEXT("[db] Failed to find component %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
+								UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Failed to find component %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
 								if (compRecord.bSpawnIfNotFound) {
 									// spawn it
 								}
@@ -612,7 +613,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 							}
 
 							if (currentComp) {
-								UE_LOG(LogTemp, Warning, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
+								UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
 								       *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
 
 								USceneComponent* SceneComp = Cast<USceneComponent>(currentComp);
@@ -621,7 +622,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 								FMemoryReader compMemoryReader(compRecord.ComponentData, true);
 								FVoxelWorldSaveGameArchive compAr(compMemoryReader);
 								currentComp->Serialize(compAr);
-								UE_LOG(LogTemp, Warning, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
+								UE_LOG(LogVoxelDatabase, Verbose, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
 							}
 						}
 
@@ -629,10 +630,10 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 
 						////
 						IISavableWithRegion::Execute_OnLoaded(NewActor);
-						UE_LOG(LogTemp, Warning, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(), region_actors.Num(), *BytesToHex(region_actors.GetData(),region_actors.Num()));
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(), region_actors.Num(), *BytesToHex(region_actors.GetData(),region_actors.Num()));
 					}
 					else {
-						UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Class %s from region saved actors! Failed to spawn at %s!"), *record.ActorClass,
+						UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Class %s from region saved actors! Failed to spawn at %s!"), *record.ActorClass,
 						       *record.ActorTransform.ToHumanReadableString());
 					}
 				}
@@ -681,7 +682,7 @@ void APagedWorld::SavePlayerActor(FString Identifier, AActor* ActorToSerialize) 
 
 			IISavableComponent::Execute_OnSaved(comp);
 
-			UE_LOG(LogTemp, Warning, TEXT("[db] Saved component %s, %d B data: %s."), *comp->GetReadableName(), compRecord.ComponentData.Num(),
+			UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Saved component %s, %d B data: %s."), *comp->GetReadableName(), compRecord.ComponentData.Num(),
 			       *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
 		}
 
@@ -704,8 +705,8 @@ void APagedWorld::SavePlayerActor(FString Identifier, AActor* ActorToSerialize) 
 
 		WorldStorageProvider->PutGlobalData("PLAYER_" + std::string(TCHAR_TO_UTF8(*Identifier)), playerSave);
 
-		UE_LOG(LogTemp, Warning, TEXT("[db] Saved player actor %s."), *Identifier);
-		UE_LOG(LogTemp, Warning, TEXT("[db] data: %s."), *BytesToHex(playerSave.GetData(),playerSave.Num()));
+		UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Saved player actor %s."), *Identifier);
+		UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] data: %s."), *BytesToHex(playerSave.GetData(),playerSave.Num()));
 		/////////////////////////////////////////////////////////
 	}
 }
@@ -721,7 +722,7 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 		UClass* recordClass = FindObject<UClass>(ANY_PACKAGE, *record.ActorClass);
 
 		if (!recordClass || !IsValid(recordClass) || ExistingActor->GetClass() != recordClass) {
-			UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Class is null or not the same as the provided actor!"), *record.ActorClass, *Identifier);
+			UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Class is null or not the same as the provided actor!"), *record.ActorClass, *Identifier);
 			return false;
 		}
 		else {
@@ -745,20 +746,20 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 
 				TSet<UActorComponent*> processedComps;
 
-				UE_LOG(LogTemp, Warning, TEXT("[db] There are %d component records on this actor %s"), record.ActorComponents.Num(), *ExistingActor->GetHumanReadableName());
+				UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d component records on this actor %s"), record.ActorComponents.Num(), *ExistingActor->GetHumanReadableName());
 
 				for (auto& compRecord : record.ActorComponents) {
 					UClass* compClass = FindObject<UClass>(ANY_PACKAGE, *compRecord.ComponentClass);
 
 					if (!compClass || !IsValid(compClass)) {
-						UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Component Class %s from saved player actor %s! Class is null!"), *compRecord.ComponentClass, *Identifier);
+						UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Component Class %s from saved player actor %s! Class is null!"), *compRecord.ComponentClass, *Identifier);
 						continue;
 					}
 
 					TArray<UActorComponent*> outComps;
 					ExistingActor->GetComponents(compClass, outComps);
 
-					UE_LOG(LogTemp, Warning, TEXT("[db] There are %d components on player actor %s"), outComps.Num(), *Identifier);
+					UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d components on player actor %s"), outComps.Num(), *Identifier);
 
 					UActorComponent* currentComp = nullptr;
 
@@ -771,7 +772,7 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 					}
 
 					if (!currentComp) {
-						UE_LOG(LogTemp, Warning, TEXT("[db] Failed to find component %s on player actor %s"), *compRecord.ComponentClass, *Identifier);
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Failed to find component %s on player actor %s"), *compRecord.ComponentClass, *Identifier);
 						if (compRecord.bSpawnIfNotFound) {
 							//todo spawn it
 						}
@@ -779,7 +780,7 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 					}
 
 					if (currentComp) {
-						UE_LOG(LogTemp, Warning, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
 						       *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
 
 						USceneComponent* SceneComp = Cast<USceneComponent>(currentComp);
@@ -788,18 +789,18 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 						FMemoryReader compMemoryReader(compRecord.ComponentData, true);
 						FVoxelWorldSaveGameArchive compAr(compMemoryReader);
 						currentComp->Serialize(compAr);
-						UE_LOG(LogTemp, Warning, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
 					}
 				}
 
 				/////////////////
 
 				////
-				UE_LOG(LogTemp, Warning, TEXT("[db] Loaded player actor %s  data %s."), *Identifier, *BytesToHex(playerSave.GetData(),playerSave.Num()));
+				UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded player actor %s  data %s."), *Identifier, *BytesToHex(playerSave.GetData(),playerSave.Num()));
 				return true;
 			}
 			else {
-				UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Failed to spawn at %s!"), *record.ActorClass, *Identifier,
+				UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Failed to spawn at %s!"), *record.ActorClass, *Identifier,
 				       *record.ActorTransform.ToHumanReadableString());
 				return false;
 			}
@@ -822,7 +823,7 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 		UClass* recordClass = FindObject<UClass>(ANY_PACKAGE, *record.ActorClass);
 
 		if (!recordClass || !IsValid(recordClass)) {
-			UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Class is null!"), *record.ActorClass, *Identifier);
+			UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Class is null!"), *record.ActorClass, *Identifier);
 			return false;
 		}
 		else {
@@ -841,20 +842,20 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 
 				TSet<UActorComponent*> processedComps;
 
-				UE_LOG(LogTemp, Warning, TEXT("[db] There are %d component records on this actor %s"), record.ActorComponents.Num(), *NewActor->GetHumanReadableName());
+				UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d component records on this actor %s"), record.ActorComponents.Num(), *NewActor->GetHumanReadableName());
 
 				for (auto& compRecord : record.ActorComponents) {
 					UClass* compClass = FindObject<UClass>(ANY_PACKAGE, *compRecord.ComponentClass);
 
 					if (!compClass || !IsValid(compClass)) {
-						UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Component Class %s from saved player actor %s! Class is null!"), *compRecord.ComponentClass, *Identifier);
+						UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Component Class %s from saved player actor %s! Class is null!"), *compRecord.ComponentClass, *Identifier);
 						continue;
 					}
 
 					TArray<UActorComponent*> outComps;
 					NewActor->GetComponents(compClass, outComps);
 
-					UE_LOG(LogTemp, Warning, TEXT("[db] There are %d components on player actor %s"), outComps.Num(), *Identifier);
+					UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d components on player actor %s"), outComps.Num(), *Identifier);
 
 					UActorComponent* currentComp = nullptr;
 
@@ -867,7 +868,7 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 					}
 
 					if (!currentComp) {
-						UE_LOG(LogTemp, Warning, TEXT("[db] Failed to find component %s on player actor %s"), *compRecord.ComponentClass, *Identifier);
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Failed to find component %s on player actor %s"), *compRecord.ComponentClass, *Identifier);
 						if (compRecord.bSpawnIfNotFound) {
 							// spawn it
 						}
@@ -875,7 +876,7 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 					}
 
 					if (currentComp) {
-						UE_LOG(LogTemp, Warning, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
 						       *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
 
 						USceneComponent* SceneComp = Cast<USceneComponent>(currentComp);
@@ -884,18 +885,18 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 						FMemoryReader compMemoryReader(compRecord.ComponentData, true);
 						FVoxelWorldSaveGameArchive compAr(compMemoryReader);
 						currentComp->Serialize(compAr);
-						UE_LOG(LogTemp, Warning, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
 					}
 				}
 
 				/////////////////
 				OutSpawnedActor = NewActor;
 				////
-				UE_LOG(LogTemp, Warning, TEXT("[db] Loaded player actor %s  data %s."), *Identifier, *BytesToHex(playerSave.GetData(),playerSave.Num()));
+				UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded player actor %s  data %s."), *Identifier, *BytesToHex(playerSave.GetData(),playerSave.Num()));
 				return true;
 			}
 			else {
-				UE_LOG(LogTemp, Warning, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Failed to spawn at %s!"), *record.ActorClass, *Identifier,
+				UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Class %s from saved player actor %s! Failed to spawn at %s!"), *record.ActorClass, *Identifier,
 				       *record.ActorTransform.ToHumanReadableString());
 				return false;
 			}
@@ -922,12 +923,12 @@ bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComp
 			}
 			else {
 				// this gets spammy
-				//UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
+				//UE_LOG(LogVoxelNet, Warning, TEXT("Server Paging Component Tick: VoxelNetServer_PlayerVoxelServers does not contain this controller."));
 				return false;
 			}
 		}
 		else {
-			UE_LOG(LogTemp, Warning, TEXT("Server Paging Component Tick: Unable to find controller for pager."));
+			UE_LOG(LogVoxelNet, Warning, TEXT("Server Paging Component Tick: Unable to find controller for pager."));
 			return false;
 		}
 	}
@@ -1015,11 +1016,11 @@ void APagedWorld::RegisterPlayerWithCookie(APlayerController* player, int64 cook
 
 			if (handshake.IsValid() && GetLocalRole() == ROLE_Authority) {
 				VoxelNetServer_PlayerVoxelServers.Add(player, handshake);
-				UE_LOG(LogTemp, Warning, TEXT("Registered player controller with cookie %llu."), cookie);
+				UE_LOG(LogVoxelNet, Warning, TEXT("Registered player controller with cookie %llu."), cookie);
 			}
-			else { UE_LOG(LogTemp, Warning, TEXT("There was no valid server for the cookie %llu."), cookie); }
+			else { UE_LOG(LogVoxelNet, Warning, TEXT("There was no valid server for the cookie %llu."), cookie); }
 		}
-		else { UE_LOG(LogTemp, Warning, TEXT("There was no handshake sent with the cookie %llu."), cookie); }
+		else { UE_LOG(LogVoxelNet, Warning, TEXT("There was no handshake sent with the cookie %llu."), cookie); }
 	}
 }
 
@@ -1072,11 +1073,11 @@ bool APagedWorld::VoxelNetServer_OnConnectionAccepted(FSocket* socket, const FIP
 		while (cookie == FMath::RandRange(-255, 255)) {
 			// this happens on early connects
 			cookie = FMath::RandRange(-255, 255);
-			UE_LOG(LogTemp, Warning, TEXT("Failed to generate random cookie for %s, retrying..."), *endpoint.ToString());
+			UE_LOG(LogVoxelNet, Warning, TEXT("Failed to generate random cookie for %s, retrying..."), *endpoint.ToString());
 			FPlatformProcess::Sleep(1);
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("Connection received from %s, starting thread..."), *endpoint.ToString());
+		UE_LOG(LogVoxelNet, Warning, TEXT("Connection received from %s, starting thread..."), *endpoint.ToString());
 		auto server = MakeShareable(new VoxelNetThreads::VoxelNetServer(cookie, socket, endpoint));
 
 		FString threadName = "VoxelNetServer_";
@@ -1122,7 +1123,7 @@ bool APagedWorld::VoxelNetClient_ConnectToServer(FString Host, int32 Port) {
 		addr->SetPort(Port > 0 ? Port : VOXELNET_PORT);
 
 		if (clientSocket->Connect(*addr)) {
-			UE_LOG(LogTemp, Warning, TEXT("Client: Connecting to server %s..."), *addr->ToString(true));
+			UE_LOG(LogVoxelNet, Warning, TEXT("Client: Connecting to server %s..."), *addr->ToString(true));
 			VoxelNetClient_VoxelClient = MakeShareable(new VoxelNetThreads::VoxelNetClient(this, clientSocket));
 			VoxelNetClient_ClientThread = FRunnableThread::Create(VoxelNetClient_VoxelClient.Get(), TEXT("VoxelNetClient"));
 		}
