@@ -79,15 +79,21 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event") FVoxelWorldUpdate VoxelWorldUpdate_Event;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bUseAsyncCollision = true;
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
-	FCriticalSection VolumeMutex; // lock for VoxelVolume
+	// lock for VoxelVolume
+	FCriticalSection VolumeMutex; 
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
-	TSet<FIntVector> ForceLoadedRegions; 
-
+	//These regions will remain pinned 
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ForceLoadedRegions; 
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void PinRegionsInRadius(FIntVector VoxelCoords, int32 Radius);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void UnpinRegionsInRadius(FIntVector VoxelCoords, int32 Radius);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void ClearPinnedRegions();
+	
 	/* Database */
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);
 	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */
+	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly) int32 VolumeTargetMemoryMB = 512;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) void Flush() const;
 
@@ -97,11 +103,14 @@ public:
 	UFUNCTION(Category = "Voxel World|Launch", BlueprintCallable) void LaunchClient(FString Host, int32 Port = 0);
 
 	/* Saving */
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void ForceSaveWorld() ;
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void ForceSaveWorld() ;
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PreSaveWorld();
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PostSaveWorld();
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void SaveAllDataForRegions(TSet<FIntVector> Regions);
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable) void LoadAllDataForRegions(TSet<FIntVector> Regions);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SaveAllDataForRegions(TSet<FIntVector> Regions);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void LoadAllDataForRegions(TSet<FIntVector> Regions);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SavePlayerActor(FString Identifier, AActor* ActorToSerialize);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadPlayerActor(FString Identifier, AActor* ExistingActor, bool bSetTransform, FTransform& OutTransform);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawnedActor);
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPostSaveWorld PostSaveWorld_Event;
 

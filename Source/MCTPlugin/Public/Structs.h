@@ -171,3 +171,25 @@ USTRUCT()
 	}
 	
  };
+
+USTRUCT()
+ struct FVoxelWorldPlayerActorRecord {
+	GENERATED_USTRUCT_BODY()
+	
+	FString ActorClass;
+	FDateTime SavedAt;
+	FTransform ActorTransform;
+	TArray<FVoxelWorldComponentRecord> ActorComponents;
+	TArray<uint8> ActorData;
+	
+
+		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldPlayerActorRecord& Record){
+		Ar << Record.ActorClass;
+		Ar << Record.SavedAt;
+		Ar << Record.ActorTransform;
+		Ar << Record.ActorComponents;
+		Ar << Record.ActorData;
+		return Ar;
+	}
+	
+ };
