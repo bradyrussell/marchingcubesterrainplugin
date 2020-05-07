@@ -28,6 +28,7 @@ DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtracti
 APagedWorld::APagedWorld() {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	bAlwaysRelevant = true;
 }
 
 APagedWorld::~APagedWorld() {
@@ -459,6 +460,31 @@ void APagedWorld::ForceSaveWorld() {
 	Flush();
 	VolumeMutex.Unlock();
 	PostSaveWorld();
+}
+
+void APagedWorld::PreSaveWorld() {
+	OnPreSaveWorld();
+	if(PreSaveWorld_Event.IsBound()) PreSaveWorld_Event.Broadcast(false);
+}
+
+void APagedWorld::PostSaveWorld() {
+		OnPostSaveWorld();
+	if(PostSaveWorld_Event.IsBound()) PostSaveWorld_Event.Broadcast(false);
+}
+
+void APagedWorld::SaveGlobalString(FString Key, FString Value) {
+	if(WorldStorageProvider)
+	WorldStorageProvider->PutGlobalString( std::string(TCHAR_TO_UTF8(*Key)), std::string(TCHAR_TO_UTF8(*Value)));
+}
+
+bool APagedWorld::LoadGlobalString(FString Key, FString& Value) {
+	if(!WorldStorageProvider) return false;
+	
+	std::string Str;
+	bool retval = WorldStorageProvider->GetGlobalString(std::string(TCHAR_TO_UTF8(*Key)), Str);
+	if(retval)
+		Value = UTF8_TO_TCHAR(Str.c_str());
+	return retval;
 }
 
 void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
@@ -910,6 +936,26 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 
 }
 
+AActor* APagedWorld::GetPersistentActor(int64 ID) {
+	auto actor = LivePersistentActors.Find(ID);
+
+	if(actor)
+	return *actor;
+	else return nullptr;
+}
+
+int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
+	RegisterExistingPersistentActor(Actor, NextPersistentActorID++);
+}
+
+void APagedWorld::RegisterExistingPersistentActor(AActor* Actor, int64 ID) {
+	LivePersistentActors.Add(ID, Actor);
+}
+
+void APagedWorld::UnregisterPersistentActor(int64 ID) {
+	LivePersistentActors.Remove(ID);
+}
+
 bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
 	if (packets.Num() > 0) {
 		auto pagingPawn = Cast<APawn>(pager->GetOwner());
@@ -1135,5 +1181,8 @@ bool APagedWorld::VoxelNetClient_ConnectToServer(FString Host, int32 Port) {
 
 int32 APagedWorld::VoxelNetClient_GetPendingRegionDownloads() const {
 	// todo this is not thread safe
-	return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload;
+	if(VoxelNetClient_VoxelClient.IsValid()){
+		return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload;
+	}
+	return -1;
 }
