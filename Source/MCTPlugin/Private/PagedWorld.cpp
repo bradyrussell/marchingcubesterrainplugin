@@ -465,6 +465,17 @@ void APagedWorld::ForceSaveWorld() {
 void APagedWorld::PreSaveWorld() {
 	OnPreSaveWorld();
 	if(PreSaveWorld_Event.IsBound()) PreSaveWorld_Event.Broadcast(false);
+
+	//todo move somewhere else  // todo write loading
+	TArray<uint8> data;
+	FMemoryWriter writer(data,true);
+
+	writer << NextPersistentActorID;
+
+	writer.Flush();
+	writer.Close();
+	
+	WorldStorageProvider->PutGlobalData("NextPersistentActorID", data);
 }
 
 void APagedWorld::PostSaveWorld() {
@@ -506,6 +517,13 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 				record.ActorClass = elem->GetClass()->GetPathName();
 				record.ActorTransform = Transform;
 
+				auto FindKey = LivePersistentActors.FindKey(elem);
+				if(FindKey) {
+					record.PersistentActorID = *FindKey;
+				} else {
+					record.PersistentActorID = 0;
+				}
+				
 				//////////////////////////////////
 				// save components
 
@@ -598,6 +616,12 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 						NewActor->Serialize(Ar);
 
 						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
+
+						if(record.PersistentActorID != 0) {
+							RegisterExistingPersistentActor(NewActor, record.PersistentActorID);
+							UE_LOG(LogTemp, Warning, TEXT("Loaded persistent actor id %d"), (int32)record.PersistentActorID);
+						}
+						
 						////
 						//////////////////
 						/// do components
@@ -945,7 +969,9 @@ AActor* APagedWorld::GetPersistentActor(int64 ID) {
 }
 
 int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
-	RegisterExistingPersistentActor(Actor, NextPersistentActorID++);
+	int64 ID = NextPersistentActorID++;
+	RegisterExistingPersistentActor(Actor, ID);
+	return ID;
 }
 
 void APagedWorld::RegisterExistingPersistentActor(AActor* Actor, int64 ID) {

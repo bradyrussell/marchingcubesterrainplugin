@@ -120,8 +120,9 @@ public:
 
 	/* Actor Ref Persistence */
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) TMap<int64, AActor*> LivePersistentActors;
-	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) int64 NextPersistentActorID = 0;
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) int64 NextPersistentActorID = 1; // 0 is reserved for null
 
+	
 	//returns the actor or null if not loaded
 	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  AActor* GetPersistentActor(int64 ID);
 

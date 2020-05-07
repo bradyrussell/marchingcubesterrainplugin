@@ -161,12 +161,14 @@ USTRUCT()
 	FTransform ActorTransform;
 	TArray<FVoxelWorldComponentRecord> ActorComponents;
 	TArray<uint8> ActorData;
+	int64 PersistentActorID;
 
 		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldActorRecord& Record){
 		Ar << Record.ActorClass;
 		Ar << Record.ActorTransform;
 		Ar << Record.ActorComponents;
 		Ar << Record.ActorData;
+		Ar << Record.PersistentActorID;
 		return Ar;
 	}
 	
