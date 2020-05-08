@@ -52,31 +52,36 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	if (!StaticProvider) { UE_LOG(LogVoxelWorld, Error, TEXT("There is no provider when trying to render parsed.")); }
 
 	// for each LOD level in output
+	if(!output.bIsEmpty){
+		for (int32 Material = 0; Material < output.section.Num(); Material++) {
+			if (output.section[Material].Indices.Num() > 0) {
+				if (!bSectionExists[Material]) {
+					StaticProvider->CreateSectionFromComponents(0, Material, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
+					                                            output.section[Material].UV0,
+					                                            output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
 
-	for (int32 Material = 0; Material < output.section.Num(); Material++) {
-		if (output.section[Material].Indices.Num() > 0) {
-			if (!bSectionExists[Material]) {
-				StaticProvider->CreateSectionFromComponents(0, Material, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
-				                                            output.section[Material].UV0,
-				                                            output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
+					bSectionExists[Material] = true;
+				}
+				else {
+					StaticProvider->UpdateSectionFromComponents(0, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
+					                                            output.section[Material].UV0,
+					                                            output.section[Material].Colors, output.section[Material].Tangents);
 
-				bSectionExists[Material] = true;
+					StaticProvider->MarkCollisionDirty();
+				}
 			}
 			else {
-				StaticProvider->UpdateSectionFromComponents(0, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
-				                                            output.section[Material].UV0,
-				                                            output.section[Material].Colors, output.section[Material].Tangents);
-
-				StaticProvider->MarkCollisionDirty();
+				StaticProvider->ClearSection(0, Material);
+				
+				//StaticProvider->MarkCollisionDirty(); do we need one here?
+				bSectionExists[Material] = false;
 			}
 		}
-		else {
-			StaticProvider->ClearSection(0, Material);
-
-			bSectionExists[Material] = false;
-		}
 	}
-
+	
+	bReadyLocally = true;
+	if(GetLocalRole() == ENetRole::ROLE_Authority) bReadyServer = true;
+	
 }
 
 void APagedRegion::UpdateNavigation() const { FNavigationSystem::UpdateComponentData(*GetRuntimeMeshComponent()); }
@@ -86,4 +91,5 @@ FIntVector APagedRegion::GetRegionLocation() const { return FIntVector(GetActorL
 void APagedRegion::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(APagedRegion, World);
+	DOREPLIFETIME(APagedRegion, bReadyServer);
 }

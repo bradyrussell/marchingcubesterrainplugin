@@ -37,8 +37,12 @@ namespace VoxelNetThreads {
 					FBufferArchive keepalive(true);
 					int32 BytesSent = 0;
 					Packet::MakeKeepAlive(keepalive);
-					socket->Send(keepalive.GetData(), keepalive.Num(), BytesSent);
-					Updated();
+					if(socket) { // still getting nullptr crashes
+						socket->Send(keepalive.GetData(), keepalive.Num(), BytesSent);
+						Updated();
+					} else {
+						Stop();
+					}
 					//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Sent keepalive packet. "));
 				}
 			}

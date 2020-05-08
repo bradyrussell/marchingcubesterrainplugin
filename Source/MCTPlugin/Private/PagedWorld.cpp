@@ -28,6 +28,7 @@ DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtracti
 APagedWorld::APagedWorld() {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	bAlwaysRelevant = true;
 }
 
 APagedWorld::~APagedWorld() {
@@ -196,7 +197,7 @@ void APagedWorld::Tick(float DeltaTime) {
 
 			if (reg != nullptr) {
 				reg->RenderParsed(gen);
-				reg->UpdateNavigation();
+				if(!gen.bIsEmpty) reg->UpdateNavigation();
 
 				//if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
@@ -381,6 +382,22 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	}
 }
 
+bool APagedWorld::isRegionReadyServer(FIntVector pos) {
+	if (regions.Contains(pos)) {
+		auto region = *regions.Find(pos);
+		return region->bReadyServer;
+	}
+	return false;
+}
+
+bool APagedWorld::isRegionReadyLocal(FIntVector pos) {
+	if (regions.Contains(pos)) {
+		auto region = *regions.Find(pos);
+		return region->bReadyLocally;
+	}
+	return false;
+}
+
 
 void APagedWorld::QueueRegionRender(FIntVector pos) {
 	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
@@ -461,6 +478,42 @@ void APagedWorld::ForceSaveWorld() {
 	PostSaveWorld();
 }
 
+void APagedWorld::PreSaveWorld() {
+	OnPreSaveWorld();
+	if(PreSaveWorld_Event.IsBound()) PreSaveWorld_Event.Broadcast(false);
+
+	//todo move somewhere else  // todo write loading
+	TArray<uint8> data;
+	FMemoryWriter writer(data,true);
+
+	writer << NextPersistentActorID;
+
+	writer.Flush();
+	writer.Close();
+	
+	WorldStorageProvider->PutGlobalData("NextPersistentActorID", data);
+}
+
+void APagedWorld::PostSaveWorld() {
+		OnPostSaveWorld();
+	if(PostSaveWorld_Event.IsBound()) PostSaveWorld_Event.Broadcast(false);
+}
+
+void APagedWorld::SaveGlobalString(FString Key, FString Value) {
+	if(WorldStorageProvider)
+	WorldStorageProvider->PutGlobalString( std::string(TCHAR_TO_UTF8(*Key)), std::string(TCHAR_TO_UTF8(*Value)));
+}
+
+bool APagedWorld::LoadGlobalString(FString Key, FString& Value) {
+	if(!WorldStorageProvider) return false;
+	
+	std::string Str;
+	bool retval = WorldStorageProvider->GetGlobalString(std::string(TCHAR_TO_UTF8(*Key)), Str);
+	if(retval)
+		Value = UTF8_TO_TCHAR(Str.c_str());
+	return retval;
+}
+
 void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 	TArray<AActor*> outActors;
 	UGameplayStatics::GetAllActorsWithInterface(this, UISavableWithRegion::StaticClass(), outActors);
@@ -480,6 +533,13 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 				record.ActorClass = elem->GetClass()->GetPathName();
 				record.ActorTransform = Transform;
 
+				auto FindKey = LivePersistentActors.FindKey(elem);
+				if(FindKey) {
+					record.PersistentActorID = *FindKey;
+				} else {
+					record.PersistentActorID = 0;
+				}
+				
 				//////////////////////////////////
 				// save components
 
@@ -572,6 +632,12 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 						NewActor->Serialize(Ar);
 
 						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
+
+						if(record.PersistentActorID != 0) {
+							RegisterExistingPersistentActor(NewActor, record.PersistentActorID);
+							UE_LOG(LogTemp, Warning, TEXT("Loaded persistent actor id %d"), (int32)record.PersistentActorID);
+						}
+						
 						////
 						//////////////////
 						/// do components
@@ -910,6 +976,41 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 
 }
 
+AActor* APagedWorld::GetPersistentActor(int64 ID) {
+	auto actor = LivePersistentActors.Find(ID);
+
+	if(actor && IsValid(*actor)) {
+		auto Actor = *actor;
+		if(!Actor->IsPendingKill())
+		return Actor;
+	}
+	return nullptr;
+}
+
+int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
+	int64 ID = NextPersistentActorID++;
+	RegisterExistingPersistentActor(Actor, ID);
+	return ID;
+}
+
+int64 APagedWorld::LookupPersistentActorID(AActor* Actor) {
+	auto Key = LivePersistentActors.FindKey(Actor);
+	if(Key) {
+		return *Key;
+	} else {
+		return 0;
+	}
+
+}
+
+void APagedWorld::RegisterExistingPersistentActor(AActor* Actor, int64 ID) {
+	LivePersistentActors.Add(ID, Actor);
+}
+
+void APagedWorld::UnregisterPersistentActor(int64 ID) {
+	LivePersistentActors.Remove(ID);
+}
+
 bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
 	if (packets.Num() > 0) {
 		auto pagingPawn = Cast<APawn>(pager->GetOwner());
@@ -1135,5 +1236,8 @@ bool APagedWorld::VoxelNetClient_ConnectToServer(FString Host, int32 Port) {
 
 int32 APagedWorld::VoxelNetClient_GetPendingRegionDownloads() const {
 	// todo this is not thread safe
-	return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload;
+	if(VoxelNetClient_VoxelClient.IsValid()){
+		return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload;
+	}
+	return -1;
 }

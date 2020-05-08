@@ -71,6 +71,8 @@ public:
 	
 	/* World */
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyServer(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(FIntVector pos);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(FIntVector VoxelCoords);
@@ -104,8 +106,12 @@ public:
 
 	/* Saving */
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void ForceSaveWorld() ;
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PreSaveWorld();
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void PostSaveWorld();
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void PreSaveWorld();
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void PostSaveWorld();
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnPreSaveWorld();
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnPostSaveWorld();
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SaveGlobalString(FString Key, FString Value);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadGlobalString(FString Key, FString& Value);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SaveAllDataForRegions(TSet<FIntVector> Regions);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void LoadAllDataForRegions(TSet<FIntVector> Regions);
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) void SavePlayerActor(FString Identifier, AActor* ActorToSerialize);
@@ -114,6 +120,26 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPostSaveWorld PostSaveWorld_Event;
 
+	/* Actor Ref Persistence */
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) TMap<int64, AActor*> LivePersistentActors;
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) int64 NextPersistentActorID = 1; // 0 is reserved for null
+
+	
+	//returns the actor or null if not loaded
+	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  AActor* GetPersistentActor(int64 ID);
+
+	//create a new ID and register the actor. returns ID
+	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  int64 RegisterNewPersistentActor(AActor* Actor);
+
+	//look up the ID for an actor or 0 if it doesnt exist
+	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  int64 LookupPersistentActorID(AActor* Actor);
+
+	//call when a persistent actor with an ID is loaded
+	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  void RegisterExistingPersistentActor(AActor* Actor, int64 ID);
+
+	//call when a persistent actor with an ID is unloaded
+	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  void UnregisterPersistentActor(int64 ID);
+	
 	/* Generation */
 	UFUNCTION(BlueprintImplementableEvent) const TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray(); 
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void BeginWorldGeneration(FIntVector RegionCoords);

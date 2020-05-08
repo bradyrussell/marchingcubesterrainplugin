@@ -157,6 +157,14 @@ bool StorageProviderBase::PutGlobalData(std::string Key, TArray<uint8>& Bytes) {
 
 bool StorageProviderBase::GetGlobalData(std::string Key, TArray<uint8>& Bytes) { return GetBytes(DB_GLOBAL_TAG + Key, Bytes); }
 
+bool StorageProviderBase::PutGlobalString(std::string Key, std::string String) {
+	return Put(DB_GLOBAL_TAG + Key, String);
+}
+
+bool StorageProviderBase::GetGlobalString(std::string Key, std::string& String) {
+	return Get(DB_GLOBAL_TAG + Key, String);
+}
+
 int StorageProviderBase::GetDatabaseFormat() {
 	std::string value;
 	const auto bExists = Get(DB_VERSION_TAG, value);

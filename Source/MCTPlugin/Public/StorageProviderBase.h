@@ -50,6 +50,9 @@ public:
 
 	bool PutGlobalData(std::string Key, TArray<uint8>& Bytes);
 	bool GetGlobalData(std::string Key, TArray<uint8>& Bytes);
+
+	bool PutGlobalString(std::string Key, std::string String);
+	bool GetGlobalString(std::string Key, std::string& String);
 	
 	int GetDatabaseFormat();
 	bool SetDatabaseFormat(int Format);

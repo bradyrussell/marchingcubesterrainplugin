@@ -56,6 +56,7 @@ USTRUCT(BlueprintType)
 	struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
 {
 	GENERATED_BODY()
+	bool bIsEmpty = false;
 	FIntVector region;
 	TArray<FExtractionTaskSection> section = TArray<FExtractionTaskSection>();
 };
@@ -161,12 +162,14 @@ USTRUCT()
 	FTransform ActorTransform;
 	TArray<FVoxelWorldComponentRecord> ActorComponents;
 	TArray<uint8> ActorData;
+	int64 PersistentActorID;
 
 		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldActorRecord& Record){
 		Ar << Record.ActorClass;
 		Ar << Record.ActorTransform;
 		Ar << Record.ActorComponents;
 		Ar << Record.ActorData;
+		Ar << Record.PersistentActorID;
 		return Ar;
 	}
 	
