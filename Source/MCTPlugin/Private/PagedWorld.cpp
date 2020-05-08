@@ -197,9 +197,10 @@ void APagedWorld::Tick(float DeltaTime) {
 
 			if (reg != nullptr) {
 				reg->RenderParsed(gen);
-				if(!gen.bIsEmpty) reg->UpdateNavigation();
-				SetHighestGeneratedRegionAt(gen.region.X,gen.region.Y,gen.region.Z);
-				//if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
+				if(!gen.bIsEmpty) {
+					reg->UpdateNavigation();
+					SetHighestGeneratedRegionAt(gen.region.X,gen.region.Y,gen.region.Z);
+				}
 			}
 			else { OnRegionError(gen.region); }
 		}
@@ -404,7 +405,7 @@ int32 APagedWorld::GetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY) {
 	if(HighestGeneratedRegion.Contains(Key)) {
 		return  *HighestGeneratedRegion.Find(Key);
 	} else {
-		return 0;
+		return -1;
 	}
 }
 
