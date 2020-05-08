@@ -19,6 +19,7 @@ namespace ExtractionThreads {
 		}
 
 		void DoWork() {
+			try{
 			FExtractionTaskOutput output;
 			output.section.AddDefaulted(MAX_MATERIALS);
 			output.region = lower;
@@ -127,6 +128,9 @@ namespace ExtractionThreads {
 			//////////////////////////
 
 			world->extractionQueue.Enqueue(output);
+				}catch (...) {
+					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s]."), *lower.ToString())
+				}
 		}
 	};
 
@@ -149,6 +153,7 @@ namespace ExtractionThreads {
 		}
 
 		void DoWork() {
+			try{
 			FExtractionTaskOutput output;
 			output.section.AddDefaulted(MAX_MATERIALS);
 			output.region = lower;
@@ -261,6 +266,9 @@ namespace ExtractionThreads {
 			//////////////////////////
 
 			world->extractionQueue.Enqueue(output);
+				}catch (...) {
+					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] CubicExtractionTask caught exception extracting [%s]."), *lower.ToString())
+				}
 		}
 	};
 
