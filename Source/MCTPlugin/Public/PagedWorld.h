@@ -71,6 +71,8 @@ public:
 	
 	/* World */
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyServer(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(FIntVector pos);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(FIntVector VoxelCoords);
@@ -128,6 +130,9 @@ public:
 
 	//create a new ID and register the actor. returns ID
 	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  int64 RegisterNewPersistentActor(AActor* Actor);
+
+	//look up the ID for an actor or 0 if it doesnt exist
+	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  int64 LookupPersistentActorID(AActor* Actor);
 
 	//call when a persistent actor with an ID is loaded
 	UFUNCTION(Category = "Voxel World|Persistent Actors", BlueprintCallable, BlueprintAuthorityOnly)  void RegisterExistingPersistentActor(AActor* Actor, int64 ID);

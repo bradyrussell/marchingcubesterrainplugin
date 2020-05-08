@@ -56,6 +56,7 @@ USTRUCT(BlueprintType)
 	struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
 {
 	GENERATED_BODY()
+	bool bIsEmpty = false;
 	FIntVector region;
 	TArray<FExtractionTaskSection> section = TArray<FExtractionTaskSection>();
 };

@@ -36,6 +36,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
 	void RenderParsed(FExtractionTaskOutput output);
 
+	// has the region been meshed on the local machine
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bReadyLocally = false;
+
+	// has the region been meshed on the server
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bReadyServer = false;
+	
 private:
 	bool bSectionExists[MAX_MATERIALS];
 };

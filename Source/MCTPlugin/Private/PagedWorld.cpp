@@ -197,7 +197,7 @@ void APagedWorld::Tick(float DeltaTime) {
 
 			if (reg != nullptr) {
 				reg->RenderParsed(gen);
-				reg->UpdateNavigation();
+				if(!gen.bIsEmpty) reg->UpdateNavigation();
 
 				//if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
 			}
@@ -380,6 +380,22 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 		UE_LOG(LogVoxelWorld, Error, TEXT("Exception spawning a new region actor at %s."), *pos.ToString());
 		return nullptr;
 	}
+}
+
+bool APagedWorld::isRegionReadyServer(FIntVector pos) {
+	if (regions.Contains(pos)) {
+		auto region = *regions.Find(pos);
+		return region->bReadyServer;
+	}
+	return false;
+}
+
+bool APagedWorld::isRegionReadyLocal(FIntVector pos) {
+	if (regions.Contains(pos)) {
+		auto region = *regions.Find(pos);
+		return region->bReadyLocally;
+	}
+	return false;
 }
 
 
@@ -972,6 +988,16 @@ int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
 	int64 ID = NextPersistentActorID++;
 	RegisterExistingPersistentActor(Actor, ID);
 	return ID;
+}
+
+int64 APagedWorld::LookupPersistentActorID(AActor* Actor) {
+	auto Key = LivePersistentActors.FindKey(Actor);
+	if(Key) {
+		return *Key;
+	} else {
+		return 0;
+	}
+
 }
 
 void APagedWorld::RegisterExistingPersistentActor(AActor* Actor, int64 ID) {

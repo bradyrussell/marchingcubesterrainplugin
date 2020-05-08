@@ -77,9 +77,11 @@ namespace ExtractionThreads {
 
 			//FVector OffsetLocation = FVector(0,0,0);//FVector(lower);
 
-			if (decoded.getNoOfIndices() == 0)
+			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
+				output.bIsEmpty = true;
+				world->extractionQueue.Enqueue(output);
 				return;
-
+			}
 
 			for (int32 Material = 0; Material < world->TerrainMaterials.Num(); Material++) {
 				// Loop over all of the triangle vertex indices
@@ -205,8 +207,11 @@ namespace ExtractionThreads {
 
 			FVector OffsetLocation = FVector(lower);
 
-			if (decoded.getNoOfIndices() == 0)
+			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
+				output.bIsEmpty = true;
+				world->extractionQueue.Enqueue(output);
 				return;
+			}
 
 
 			for (int32 Material = 0; Material < world->TerrainMaterials.Num(); Material++) {
