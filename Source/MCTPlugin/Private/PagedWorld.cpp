@@ -979,9 +979,12 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 AActor* APagedWorld::GetPersistentActor(int64 ID) {
 	auto actor = LivePersistentActors.Find(ID);
 
-	if(actor)
-	return *actor;
-	else return nullptr;
+	if(actor && IsValid(*actor)) {
+		auto Actor = *actor;
+		if(!Actor->IsPendingKill())
+		return Actor;
+	}
+	return nullptr;
 }
 
 int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
