@@ -197,9 +197,10 @@ void APagedWorld::Tick(float DeltaTime) {
 
 			if (reg != nullptr) {
 				reg->RenderParsed(gen);
-				if(!gen.bIsEmpty) reg->UpdateNavigation();
-
-				//if (bIsVoxelNetServer) { VoxelNetServer_justCookedRegions.Add(gen.region); }
+				if(!gen.bIsEmpty) {
+					reg->UpdateNavigation();
+					SetHighestGeneratedRegionAt(gen.region.X,gen.region.Y,gen.region.Z);
+				}
 			}
 			else { OnRegionError(gen.region); }
 		}
@@ -398,6 +399,27 @@ bool APagedWorld::isRegionReadyLocal(FIntVector pos) {
 	return false;
 }
 
+
+int32 APagedWorld::GetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY) {
+	auto Key = FIntVector(RegionX,RegionY,0);
+	if(HighestGeneratedRegion.Contains(Key)) {
+		return  *HighestGeneratedRegion.Find(Key);
+	} else {
+		return -1;
+	}
+}
+
+void APagedWorld::SetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY, int32 RegionZ) {
+	auto Key = FIntVector(RegionX,RegionY,0);
+	if(HighestGeneratedRegion.Contains(Key)) {
+		int32 CurrentHighest = *HighestGeneratedRegion.Find(Key);
+		if(RegionZ > CurrentHighest) {
+			HighestGeneratedRegion.Emplace(Key, RegionZ);
+		}
+	} else {
+		HighestGeneratedRegion.Emplace(Key, RegionZ);
+	}
+}
 
 void APagedWorld::QueueRegionRender(FIntVector pos) {
 	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }

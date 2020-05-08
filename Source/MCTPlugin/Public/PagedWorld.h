@@ -157,6 +157,12 @@ public:
 	float PagingComponentTickTimer = 0;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadWrite, EditAnywhere) float PagingComponentTickRate = 1.f;
 
+	// records the highest Z region of any given (X,Y,0) key
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, int32> HighestGeneratedRegion;
+
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable, BlueprintAuthorityOnly) int32 GetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY);
+	void SetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY, int32 RegionZ);
+	
 	/* Rendering */
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) bool bRenderMarchingCubes = false;
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) TArray<UMaterialInterface*> TerrainMaterials;
