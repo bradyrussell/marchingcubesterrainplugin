@@ -26,6 +26,8 @@ namespace WorldGenThreads {
 			FWorldGenerationTaskOutput output;
 			output.pos = lower;
 
+			output.bIsEmpty = true;
+			
 			// generate
 			for (int32 x = 0; x < REGION_SIZE; x++) {
 				for (int32 y = 0; y < REGION_SIZE; y++) {
@@ -43,7 +45,11 @@ namespace WorldGenThreads {
 							return; // this happens if the game quits during worldgen
 						}
 
-						output.voxel[x][y][z] = WorldGen::Interpret_Mars(x + lower.X, y + lower.Y, z + lower.Z, noise);
+						auto Voxel = WorldGen::Interpret_Mars(x + lower.X, y + lower.Y, z + lower.Z, noise);
+						output.voxel[x][y][z] = Voxel;
+
+						if(/*Voxel.getDensity() > 0 || */Voxel.getMaterial() > 0) output.bIsEmpty = false;
+						
 //						output.voxel[x][y][z] = world->WorldGenerationProvider->GetVoxel(x + lower.X, y + lower.Y, z + lower.Z); //0xC0000005: Access violation executing location 0x0000023D00000008.
 					}
 				}

@@ -67,6 +67,7 @@ USTRUCT(BlueprintType)
 	GENERATED_BODY()
 	FIntVector region;
 	TArray<uint8> packet;
+	bool bIsEmpty;
 };
 
 USTRUCT(BlueprintType)
@@ -116,8 +117,10 @@ USTRUCT(BlueprintType)
 
 	UPROPERTY(BlueprintReadWrite, Category = "WorldGen Task")
 	FIntVector pos;
-
 	PolyVox::MaterialDensityPair88 voxel[REGION_SIZE][REGION_SIZE][REGION_SIZE];
+
+	// is it entirely zeroed?
+	bool bIsEmpty;
 };
 
 USTRUCT(BlueprintType)

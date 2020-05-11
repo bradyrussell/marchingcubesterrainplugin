@@ -51,12 +51,16 @@ namespace ExtractionThreads {
 				packet.y = lower.Y;
 				packet.z = lower.Z;
 
+				packetOutput.bIsEmpty = true;
+				
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
 						for (int32 z = 0; z < REGION_SIZE; z++) {
 							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
 							packet.data[0][x][y][z] = voxel.getMaterial();
 							packet.data[1][x][y][z] = voxel.getDensity();
+
+							if(packet.data[0][x][y][z] > 0) packetOutput.bIsEmpty = false;
 						}
 					}
 				}
@@ -190,12 +194,16 @@ namespace ExtractionThreads {
 				packet.y = lower.Y;
 				packet.z = lower.Z;
 
+				packetOutput.bIsEmpty = true;
+				
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
 						for (int32 z = 0; z < REGION_SIZE; z++) {
 							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
 							packet.data[0][x][y][z] = voxel.getMaterial();
 							packet.data[1][x][y][z] = voxel.getDensity();
+
+							if(packet.data[0][x][y][z] > 0) packetOutput.bIsEmpty = false;
 						}
 					}
 				}

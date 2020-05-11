@@ -104,9 +104,17 @@ void APagedWorld::WorldNewRegionsTick() {
 			ServerGeneratedRegions.Emplace(gen.pos);
 			UE_LOG(LogVoxelWorld, Warning, TEXT("Finished worldgen for region [%s] Marking for resend."), *gen.pos.ToString());
 
-			// todo or IF anyone is subscribed to this
-			//todo IF i have already sent this as a packet, resend AFTER next extraction
-			PacketsToSendOrResendToSubscribersNextExtraction.Add(gen.pos);
+			if(!gen.bIsEmpty) {
+				bool needed = false;
+				for(auto pager:pagingComponents) {
+					if(pager->subscribedRegions.Contains(gen.pos)) { // is anyone subscribed to this
+						needed = true;
+						break;
+					}
+				}
+
+				if(needed) PacketsToSendOrResendToSubscribersNextExtraction.Emplace(gen.pos);
+			}
 			
 			MarkRegionDirtyAndAdjacent(gen.pos);
 			if (RegionGenerated_Event.IsBound())
@@ -149,15 +157,25 @@ void APagedWorld::VoxelNetServerTick() {
 		FPacketTaskOutput output;
 		VoxelNetServer_packetQueue.Dequeue(output);
 		VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
+
 		UE_LOG(LogVoxelWorld, Warning, TEXT("Generated and cached packet for region [%s] %d."),*output.region.ToString(), output.packet.Num());
+		
+		if(!output.bIsEmpty) { // we only request non air regions to be resent
+			if(PacketsToSendOrResendToSubscribersNextExtraction.Contains(output.region)) {
+				PacketsReadyToSendOrResend.Emplace(output.region);
+				PacketsToSendOrResendToSubscribersNextExtraction.Remove(output.region);
+				UE_LOG(LogVoxelWorld, Warning, TEXT("Force (re)sending region [%s]."), *output.region.ToString());
+			}
+		}
+
 	}
 }
 
 void APagedWorld::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
 
-	auto ResendClone = PacketsToSendOrResendToSubscribersNextExtraction;
-	PacketsToSendOrResendToSubscribersNextExtraction.Reset();
+	//auto ResendClone = PacketsReadyToSendOrResend; // because we add to this in WorldNewRegionsTick()
+	//PacketsToSendOrResendToSubscribersNextExtraction.Reset();
 	
 	// get any recently generated packets and put them in the queue
 	if (bIsVoxelNetServer) { VoxelNetServerTick(); }
@@ -215,9 +233,10 @@ void APagedWorld::Tick(float DeltaTime) {
 			NumRegionsPendingExtraction--;
 			auto reg = getRegionAt(gen.region);
 
-			if(ResendClone.Contains(gen.region)) {
+			if(PacketsReadyToSendOrResend.Contains(gen.region)) {
 				ForceSendRegions.Emplace(gen.region);
-				UE_LOG(LogVoxelWorld, Warning, TEXT("Force (re)sending region [%s]."), *gen.region.ToString());
+				PacketsReadyToSendOrResend.Remove(gen.region);
+				UE_LOG(LogVoxelWorld, Warning, TEXT("Force (re)sending region NOW [%s]."), *gen.region.ToString()); /// todo this should be after packets deuque not this
 			}
 			
 			if (reg != nullptr) {
@@ -234,6 +253,8 @@ void APagedWorld::Tick(float DeltaTime) {
 				OnRegionError(gen.region);
 			}
 		}
+
+		//PacketsToSendOrResendToSubscribersNextExtraction.Append(ResendClone); // these were not extracted this frame
 
 		if (bIsVoxelNetServer) {
 			for (auto& pager : pagingComponents) {
@@ -253,7 +274,7 @@ void APagedWorld::Tick(float DeltaTime) {
 					packets.Add(packetToSend);
 					hits.Emplace(waitingFor);
 
-					if(ResendClone.Contains(waitingFor)){
+					if(ForceSendRegions.Contains(waitingFor)){
 						UE_LOG(LogVoxelWorld, Warning, TEXT("Re sent region [%s] %d."), *waitingFor.ToString(), packetToSend.Num());
 						//PacketsToSendOrResendToSubscribersNextExtraction.Remove(waitingFor); // todo remove this asssumes one player
 					}
@@ -404,6 +425,10 @@ void APagedWorld::SaveAndShutdown() {
 }
 
 void APagedWorld::RegisterPagingComponent(UTerrainPagingComponent* pagingComponent) { pagingComponents.AddUnique(pagingComponent); }
+
+void APagedWorld::ResendRegion(FIntVector region) {
+	PacketsToSendOrResendToSubscribersNextExtraction.Emplace(region);
+}
 
 APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	if (regions.Contains(pos))
