@@ -63,8 +63,9 @@ public:
 	void Tick(float DeltaTime) override;
 	//debug
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
-	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ClientDownloadedRegions;
-	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ServerGeneratedRegions;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ClientDownloadedRegions; // todo remove
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ServerGeneratedRegions; // todo remove
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsToSendOrResendToSubscribersNextExtraction;
 
 	// if true, creates CORE_COUNT threads per pool, if false CORE_COUNT / POOL_NUM per pool
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bShareCores; // dont know which would be faster

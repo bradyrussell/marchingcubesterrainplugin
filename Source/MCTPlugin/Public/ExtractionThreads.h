@@ -30,7 +30,7 @@ namespace ExtractionThreads {
 			
 			world->VolumeMutex.Lock();
 				
-			UE_LOG(LogVoxelWorld, Warning, TEXT("Capturing voxels to make packet [%s]."), *lower.ToString());
+			//UE_LOG(LogVoxelWorld, Warning, TEXT("Capturing voxels to make packet [%s]."), *lower.ToString());
 				
 			if(!world->VoxelVolume.IsValid()) return;
 			
