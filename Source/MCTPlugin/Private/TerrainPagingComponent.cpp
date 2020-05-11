@@ -1,6 +1,7 @@
 #include "TerrainPagingComponent.h"
 #include "PagedWorld.h"
 #include "Kismet/GameplayStatics.h"
+#include "Net/UnrealNetwork.h"
 
 UTerrainPagingComponent::UTerrainPagingComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -17,18 +18,18 @@ bool UTerrainPagingComponent::PrepareToTeleport(const FVector Destination) {
 	bUseOverrideLocation = true;
 	// somehow notify when received? gotta figure out what it means to receive all...
 	// maybe viewdist*2 ^ 3 and wait til we receive that many packets?
-	ExpectedRegions = FMath::Pow(viewDistance * 2, 3);
+	//ExpectedRegions = FMath::Pow(viewDistance * 2, 3);
 	return true;
 	
 }
 
 void UTerrainPagingComponent::OnSentRegionPacket(int Num) {
-	ExpectedRegions--;
-	if(ExpectedRegions == 0 && bIsPreparingTeleport) {
-		bIsPreparingTeleport = false;
-		bFreezePawn = false;
-		bUseOverrideLocation = false;
-	}
+	//ExpectedRegions--;
+	//if(ExpectedRegions == 0 && bIsPreparingTeleport) {
+	//	bIsPreparingTeleport = false;
+	//	bFreezePawn = false;
+	//	bUseOverrideLocation = false;
+	//}
 }
 
 FVector UTerrainPagingComponent::GetPagingLocation() const {
@@ -57,4 +58,11 @@ void UTerrainPagingComponent::BeginPlay() {
 
 void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	DebugWaitingForAmount = waitingForPackets.Num();
+}
+
+void UTerrainPagingComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UTerrainPagingComponent, DebugWaitingForAmount);
+
 }

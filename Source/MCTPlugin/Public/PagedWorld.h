@@ -63,6 +63,9 @@ public:
 	void Tick(float DeltaTime) override;
 	//debug
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsToSendOrResendToSubscribersNextExtraction;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsReadyToSendOrResend;
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void ResendRegion(FIntVector region);
 
 	// if true, creates CORE_COUNT threads per pool, if false CORE_COUNT / POOL_NUM per pool
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bShareCores; // dont know which would be faster
@@ -73,6 +76,8 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyServer(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyServer(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyLocal(FIntVector pos);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(FIntVector VoxelCoords);
@@ -150,7 +155,8 @@ public:
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
-	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;// todo replace with below
+
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FRegionGenerated RegionGenerated_Event;
 	//WorldGeneratorBase * WorldGenerationProvider;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
@@ -170,6 +176,7 @@ public:
 	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 	TSet<FIntVector> dirtyRegions;// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 NumRegionsPendingExtraction = 0;
 
 	/* Networking */
 	UPROPERTY(Category = "Voxel World|Networking", BlueprintReadWrite, EditAnywhere) bool bIsVoxelNetServer = false;
@@ -195,6 +202,7 @@ public:
 
 	/* Voxelnet Client */
 	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)bool VoxelNetClient_ConnectToServer(FString Host, int32 Port = 0);
+	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)bool VoxelNetClient_DisconnectFromServer();
 	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)int32 VoxelNetClient_GetPendingRegionDownloads() const;
 	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
 	FRunnableThread* VoxelNetClient_ClientThread;

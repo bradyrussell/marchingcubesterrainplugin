@@ -37,8 +37,12 @@ void APagedRegion::BeginPlay() {
 	StaticProvider->SetCollisionSettings(CollisionSettings);
 
 	//this is meant to allow the regions map to be replicated
-	if (World)
-		if (!World->bIsVoxelNetServer) { World->regions.Add(FIntVector(GetRegionLocation()), this); }
+	if (World){
+		if (!World->bIsVoxelNetServer && !World->bIsVoxelNetSingleplayer) {
+			World->regions.Add(FIntVector(GetRegionLocation()), this);
+			World->dirtyRegions.Emplace(this->GetRegionLocation());
+		}
+	}
 }
 
 void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
@@ -52,7 +56,7 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 	if (!StaticProvider) { UE_LOG(LogVoxelWorld, Error, TEXT("There is no provider when trying to render parsed.")); }
 
 	// for each LOD level in output
-	if(!output.bIsEmpty){
+	//if(!output.bIsEmpty){   // this is making it so the last mesh of a region cant be cleared. i dont see any harm in iterating on air regions
 		for (int32 Material = 0; Material < output.section.Num(); Material++) {
 			if (output.section[Material].Indices.Num() > 0) {
 				if (!bSectionExists[Material]) {
@@ -77,11 +81,14 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 				bSectionExists[Material] = false;
 			}
 		}
-	}
-	
+	//}
+
+	bEmptyLocally = output.bIsEmpty;
 	bReadyLocally = true;
-	if(GetLocalRole() == ENetRole::ROLE_Authority) bReadyServer = true;
-	
+	if(GetLocalRole() == ENetRole::ROLE_Authority) {
+		bReadyServer = true;
+		bEmptyServer = output.bIsEmpty;
+	}
 }
 
 void APagedRegion::UpdateNavigation() const { FNavigationSystem::UpdateComponentData(*GetRuntimeMeshComponent()); }
@@ -92,4 +99,5 @@ void APagedRegion::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(APagedRegion, World);
 	DOREPLIFETIME(APagedRegion, bReadyServer);
+	DOREPLIFETIME(APagedRegion, bEmptyServer);
 }

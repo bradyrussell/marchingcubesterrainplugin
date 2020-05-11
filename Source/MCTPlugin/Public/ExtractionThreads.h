@@ -21,7 +21,7 @@ namespace ExtractionThreads {
 		void DoWork() {
 			try{
 			FExtractionTaskOutput output;
-			output.section.AddDefaulted(MAX_MATERIALS);
+			output.section.AddDefaulted(world->TerrainMaterials.Num());
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
@@ -29,7 +29,9 @@ namespace ExtractionThreads {
 			                                                 lower.Z + REGION_SIZE));
 			
 			world->VolumeMutex.Lock();
-
+				
+			//UE_LOG(LogVoxelWorld, Warning, TEXT("Capturing voxels to make packet [%s]."), *lower.ToString());
+				
 			if(!world->VoxelVolume.IsValid()) return;
 			
 			if (world->bIsVoxelNetServer) {
@@ -49,12 +51,16 @@ namespace ExtractionThreads {
 				packet.y = lower.Y;
 				packet.z = lower.Z;
 
+				packetOutput.bIsEmpty = true;
+				
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
 						for (int32 z = 0; z < REGION_SIZE; z++) {
 							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
 							packet.data[0][x][y][z] = voxel.getMaterial();
 							packet.data[1][x][y][z] = voxel.getDensity();
+
+							if(packet.data[0][x][y][z] > 0) packetOutput.bIsEmpty = false;
 						}
 					}
 				}
@@ -128,7 +134,12 @@ namespace ExtractionThreads {
 			//////////////////////////
 
 			world->extractionQueue.Enqueue(output);
-				}catch (...) {
+				}
+			catch (std::exception e) {
+				
+					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s] [%s]."), *lower.ToString(), *FString(e.what()))
+				}
+			catch (...) {
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s]."), *lower.ToString())
 				}
 		}
@@ -155,7 +166,7 @@ namespace ExtractionThreads {
 		void DoWork() {
 			try{
 			FExtractionTaskOutput output;
-			output.section.AddDefaulted(MAX_MATERIALS);
+			output.section.AddDefaulted(world->TerrainMaterials.Num());
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
@@ -183,12 +194,16 @@ namespace ExtractionThreads {
 				packet.y = lower.Y;
 				packet.z = lower.Z;
 
+				packetOutput.bIsEmpty = true;
+				
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
 						for (int32 z = 0; z < REGION_SIZE; z++) {
 							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
 							packet.data[0][x][y][z] = voxel.getMaterial();
 							packet.data[1][x][y][z] = voxel.getDensity();
+
+							if(packet.data[0][x][y][z] > 0) packetOutput.bIsEmpty = false;
 						}
 					}
 				}
@@ -200,6 +215,7 @@ namespace ExtractionThreads {
 				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
+				
 			}
 			// end packet generation
 			

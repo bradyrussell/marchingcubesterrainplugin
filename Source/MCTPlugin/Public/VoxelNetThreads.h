@@ -89,7 +89,7 @@ namespace VoxelNetThreads {
 								opcodeBuffer << version;
 								opcodeBuffer << cookie;
 								handshakes.Enqueue(cookie);
-								UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %llu"), version, cookie);
+								UE_LOG(LogVoxelNet, Warning, TEXT("Client: Received handshake packet. Protocol version %d, Cookie: %s"), version, *FString(std::to_string(cookie).c_str()));
 							}
 						}
 						else if (opcodeBuffer[0] == 0x3) {
@@ -132,11 +132,11 @@ namespace VoxelNetThreads {
 
 								if (socket->Recv(opcodeBuffer.GetData() + 5, FMath::Min((int32)dataSize, BUFFER_SIZE), BytesRead)) {
 									remainingRegionsToDownload--;
-									//UE_LOG(LogVoxelNet, Warning, TEXT("Client: Finished reading compressed chunk received %d bytes out of %d. Remaining regions: %d"), BytesRead, dataSize, remainingRegionsToDownload);
+									//UE_LOG(LogVoxelNet, Warning, TEXT("Client:  Finished reading compressed chunk received %d bytes out of %d. Remaining regions: %d"), BytesRead, dataSize, remainingRegionsToDownload);
 
 									Packet::RegionData data;
 									Packet::ParseRegionResponse(opcodeBuffer, data);
-
+									//UE_LOG(LogVoxelNet, Warning, TEXT("Client:  Downloaded region [%d, %d, %d] %d bytes"), data.x,data.y,data.z, BytesRead);
 									downloadedRegions.Enqueue(data);
 								}
 							}
@@ -224,7 +224,7 @@ namespace VoxelNetThreads {
 			socket->Send(handshake.GetData(), handshake.Num(), sent);
 			Updated();
 
-			UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Sent handshake. %d bytes. Protocol version: %d, cookie: %llu"), *endpoint.ToString(), sent, PROTOCOL_VERSION, cookie);
+			UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Sent handshake. %d bytes. Protocol version: %d, cookie: %s"), *endpoint.ToString(), sent, PROTOCOL_VERSION, *FString(std::to_string(cookie).c_str()));
 
 			// handshake accepted
 			while (running && lastUpdate + FTimespan::FromSeconds(SOCKET_TIMEOUT) >= FDateTime::Now()) {
@@ -236,6 +236,7 @@ namespace VoxelNetThreads {
 					for (auto& elem : upload) {
 						int32 BytesSent = 0;
 						socket->Send(elem.GetData(), elem.Num(), BytesSent);
+						//UE_LOG(LogVoxelNet, Verbose, TEXT("----> Server sent region [%s] %d bytes"), BytesSent);
 						BytesTotal += BytesSent;
 					}
 					UE_LOG(LogVoxelNet, Verbose, TEXT("----> Server sent %f kilobytes of compressed region data, with %d regions."), BytesTotal/1024.0, upload.Num());
