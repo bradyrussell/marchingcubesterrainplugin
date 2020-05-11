@@ -17,18 +17,18 @@ bool UTerrainPagingComponent::PrepareToTeleport(const FVector Destination) {
 	bUseOverrideLocation = true;
 	// somehow notify when received? gotta figure out what it means to receive all...
 	// maybe viewdist*2 ^ 3 and wait til we receive that many packets?
-	ExpectedRegions = FMath::Pow(viewDistance * 2, 3);
+	//ExpectedRegions = FMath::Pow(viewDistance * 2, 3);
 	return true;
 	
 }
 
 void UTerrainPagingComponent::OnSentRegionPacket(int Num) {
-	ExpectedRegions--;
-	if(ExpectedRegions == 0 && bIsPreparingTeleport) {
-		bIsPreparingTeleport = false;
-		bFreezePawn = false;
-		bUseOverrideLocation = false;
-	}
+	//ExpectedRegions--;
+	//if(ExpectedRegions == 0 && bIsPreparingTeleport) {
+	//	bIsPreparingTeleport = false;
+	//	bFreezePawn = false;
+	//	bUseOverrideLocation = false;
+	//}
 }
 
 FVector UTerrainPagingComponent::GetPagingLocation() const {

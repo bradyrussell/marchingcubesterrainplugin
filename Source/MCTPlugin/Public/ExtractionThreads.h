@@ -21,7 +21,7 @@ namespace ExtractionThreads {
 		void DoWork() {
 			try{
 			FExtractionTaskOutput output;
-			output.section.AddDefaulted(MAX_MATERIALS);
+			output.section.AddDefaulted(world->TerrainMaterials.Num());
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
@@ -128,7 +128,12 @@ namespace ExtractionThreads {
 			//////////////////////////
 
 			world->extractionQueue.Enqueue(output);
-				}catch (...) {
+				}
+			catch (std::exception e) {
+				
+					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s] [%s]."), *lower.ToString(), *FString(e.what()))
+				}
+			catch (...) {
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s]."), *lower.ToString())
 				}
 		}
@@ -155,7 +160,7 @@ namespace ExtractionThreads {
 		void DoWork() {
 			try{
 			FExtractionTaskOutput output;
-			output.section.AddDefaulted(MAX_MATERIALS);
+			output.section.AddDefaulted(world->TerrainMaterials.Num());
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),

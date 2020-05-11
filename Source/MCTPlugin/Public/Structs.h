@@ -11,7 +11,7 @@
 #include "Serialization/ObjectAndNameAsStringProxyArchive.h"
 #include "Structs.generated.h"
 
-//https://garvinized.com/posts/2016/voxel-terrain-in-unreal-engine-4-part-3/
+// https://github.com/LtBrandon/UE4VoxelTerrain
 // Bridge between PolyVox Vector3DFloat and Unreal Engine 4 FVector
 struct FPolyVoxVector : public FVector {
 	FORCEINLINE FPolyVoxVector() {
@@ -76,8 +76,16 @@ USTRUCT(BlueprintType)
 	FVoxelUpdate() {
 	}
 
-	FVoxelUpdate(FIntVector Origin, uint8 Radius, uint8 Material, uint8 Density, AActor* causeActor = nullptr, bool IsSpherical = false, bool ShouldDrop = true, bool ShouldCallEvent = true)
-		: origin(Origin), radius(Radius), material(Material), density(Density), bShouldDrop(ShouldDrop), bIsSpherical(IsSpherical), bShouldCallEvent(ShouldCallEvent), causeActor(causeActor) {
+
+	FVoxelUpdate(const FIntVector& Origin, uint8 Radius, uint8 Material, uint8 Density, bool bShouldDrop, bool bIsSpherical, bool bShouldCallEvent, AActor* CauseActor)
+		: origin(Origin),
+		  radius(Radius),
+		  material(Material),
+		  density(Density),
+		  bShouldDrop(bShouldDrop),
+		  bIsSpherical(bIsSpherical),
+		  bShouldCallEvent(bShouldCallEvent),
+		  causeActor(CauseActor) {
 	}
 
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")

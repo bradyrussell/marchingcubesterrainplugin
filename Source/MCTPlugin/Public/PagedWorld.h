@@ -73,6 +73,8 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyServer(FIntVector pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyServer(FIntVector pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyLocal(FIntVector pos);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(FIntVector VoxelCoords);
@@ -170,6 +172,7 @@ public:
 	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 	TSet<FIntVector> dirtyRegions;// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 NumRegionsPendingExtraction = 0;
 
 	/* Networking */
 	UPROPERTY(Category = "Voxel World|Networking", BlueprintReadWrite, EditAnywhere) bool bIsVoxelNetServer = false;
@@ -195,6 +198,7 @@ public:
 
 	/* Voxelnet Client */
 	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)bool VoxelNetClient_ConnectToServer(FString Host, int32 Port = 0);
+	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)bool VoxelNetClient_DisconnectFromServer();
 	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)int32 VoxelNetClient_GetPendingRegionDownloads() const;
 	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
 	FRunnableThread* VoxelNetClient_ClientThread;

@@ -30,8 +30,10 @@ namespace WorldGenThreads {
 			for (int32 x = 0; x < REGION_SIZE; x++) {
 				for (int32 y = 0; y < REGION_SIZE; y++) {
 					for (int32 z = 0; z < REGION_SIZE; z++) {
-						if (noise.Num() == 0)
+						if (noise.Num() == 0){
+							UE_LOG(LogVoxelWorld, Error, TEXT("Failed to generate region [%s]: cannot access noise generators."),*lower.ToString());
 							return; // this happens if the game quits during worldgen
+						}
 
 						output.voxel[x][y][z] = WorldGen::Interpret_Mars(x + lower.X, y + lower.Y, z + lower.Z, noise);
 //						output.voxel[x][y][z] = world->WorldGenerationProvider->GetVoxel(x + lower.X, y + lower.Y, z + lower.Z); //0xC0000005: Access violation executing location 0x0000023D00000008.
