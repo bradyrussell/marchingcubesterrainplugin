@@ -64,6 +64,7 @@ public:
 	//debug
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ClientDownloadedRegions;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ServerGeneratedRegions;
 
 	// if true, creates CORE_COUNT threads per pool, if false CORE_COUNT / POOL_NUM per pool
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bShareCores; // dont know which would be faster
@@ -153,7 +154,8 @@ public:
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
-	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;// todo replace with below
+	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TSet<FIntVector> RegionsCurrentlyGenerating;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FRegionGenerated RegionGenerated_Event;
 	//WorldGeneratorBase * WorldGenerationProvider;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;

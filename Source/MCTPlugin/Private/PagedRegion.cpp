@@ -38,7 +38,7 @@ void APagedRegion::BeginPlay() {
 
 	//this is meant to allow the regions map to be replicated
 	if (World){
-		if (!World->bIsVoxelNetServer) {
+		if (!World->bIsVoxelNetServer && !World->bIsVoxelNetSingleplayer) {
 			World->regions.Add(FIntVector(GetRegionLocation()), this);
 			World->dirtyRegions.Emplace(this->GetRegionLocation());
 		}

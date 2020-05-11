@@ -50,6 +50,7 @@ namespace WorldGenThreads {
 			}
 
 			world->worldGenerationQueue.Enqueue(output);
+			UE_LOG(LogVoxelWorld, Warning, TEXT("Generated voxels for region [%s]."),*lower.ToString());
 		}
 	};
 

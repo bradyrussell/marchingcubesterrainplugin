@@ -100,6 +100,10 @@ void APagedWorld::WorldNewRegionsTick() {
 				}
 			}
 			remainingRegionsToGenerate--;
+			RegionsCurrentlyGenerating.Remove(gen.pos);
+			ServerGeneratedRegions.Emplace(gen.pos);
+			UE_LOG(LogVoxelWorld, Warning, TEXT("Finished worldgen for region [%s]."), *gen.pos.ToString());
+			
 			MarkRegionDirtyAndAdjacent(gen.pos);
 			if (RegionGenerated_Event.IsBound())
 				RegionGenerated_Event.Broadcast(gen.pos);
@@ -141,6 +145,7 @@ void APagedWorld::VoxelNetServerTick() {
 		FPacketTaskOutput output;
 		VoxelNetServer_packetQueue.Dequeue(output);
 		VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
+		UE_LOG(LogVoxelWorld, Warning, TEXT("Generated and cached packet for region [%s]."),*output.region.ToString());
 	}
 }
 
@@ -396,7 +401,7 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 
 		regions.Add(pos, region);
 
-		MarkRegionDirtyAndAdjacent(pos);
+		//MarkRegionDirtyAndAdjacent(pos); // What is the purpose of this?
 		return region;
 	}
 	catch (...) {
@@ -453,6 +458,7 @@ void APagedWorld::SetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY, int3
 
 void APagedWorld::QueueRegionRender(FIntVector pos) {
 	NumRegionsPendingExtraction++;
+
 	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
 	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
 }
@@ -508,6 +514,9 @@ void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uin
 void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		remainingRegionsToGenerate++;
+		RegionsCurrentlyGenerating.Emplace(RegionCoords);
+		UE_LOG(LogVoxelWorld, Warning, TEXT("Starting worldgen for region [%s]."), *RegionCoords.ToString());
+		
 		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, RegionCoords))->StartBackgroundTask(VoxelWorldThreadPool);
 	}
 }

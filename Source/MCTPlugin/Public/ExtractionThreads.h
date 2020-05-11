@@ -29,7 +29,9 @@ namespace ExtractionThreads {
 			                                                 lower.Z + REGION_SIZE));
 			
 			world->VolumeMutex.Lock();
-
+				
+			UE_LOG(LogVoxelWorld, Warning, TEXT("Capturing voxels to make packet [%s]."), *lower.ToString());
+				
 			if(!world->VoxelVolume.IsValid()) return;
 			
 			if (world->bIsVoxelNetServer) {
@@ -205,6 +207,7 @@ namespace ExtractionThreads {
 				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
+				
 			}
 			// end packet generation
 			
