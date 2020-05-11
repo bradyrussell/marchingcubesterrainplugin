@@ -31,7 +31,15 @@ namespace WorldGenThreads {
 				for (int32 y = 0; y < REGION_SIZE; y++) {
 					for (int32 z = 0; z < REGION_SIZE; z++) {
 						if (noise.Num() == 0){
+							//todo this happens during game
 							UE_LOG(LogVoxelWorld, Error, TEXT("Failed to generate region [%s]: cannot access noise generators."),*lower.ToString());
+
+							if(IsValid(world)){
+								//todo fix
+								//requeue the region as a workaround
+								world->remainingRegionsToGenerate--;
+								world->QueueRegionRender(lower);
+							}
 							return; // this happens if the game quits during worldgen
 						}
 

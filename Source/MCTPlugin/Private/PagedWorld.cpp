@@ -122,6 +122,8 @@ void APagedWorld::VoxelNetClientTick() {
 			Packet::RegionData data;
 			client->downloadedRegions.Dequeue(data);
 
+			ClientDownloadedRegions.Emplace(FIntVector(data.x,data.y,data.z));
+			
 			for (int x = 0; x < REGION_SIZE; x++) {
 				for (int y = 0; y < REGION_SIZE; y++) {
 					for (int z = 0; z < REGION_SIZE; z++) {
@@ -224,8 +226,9 @@ void APagedWorld::Tick(float DeltaTime) {
 				TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);
 
 				for (auto& waitingFor : pager->waitingForPackets.Intersect(cacheSet)) {
-					// where waitingFor and the cache intersect send packets
-					packets.Add(VoxelNetServer_regionPackets.FindRef(waitingFor));
+					auto packetToSend = VoxelNetServer_regionPackets.FindRef(waitingFor);
+					// where waitingFor and the cache intersect send packets					
+					packets.Add(packetToSend);
 					hits.Emplace(waitingFor);
 				}
 

@@ -1,6 +1,7 @@
 #include "TerrainPagingComponent.h"
 #include "PagedWorld.h"
 #include "Kismet/GameplayStatics.h"
+#include "Net/UnrealNetwork.h"
 
 UTerrainPagingComponent::UTerrainPagingComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -57,4 +58,11 @@ void UTerrainPagingComponent::BeginPlay() {
 
 void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	DebugWaitingForAmount = waitingForPackets.Num();
+}
+
+void UTerrainPagingComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UTerrainPagingComponent, DebugWaitingForAmount);
+
 }

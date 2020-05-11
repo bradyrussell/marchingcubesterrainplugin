@@ -40,11 +40,11 @@ public:
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bReadyLocally = false;
 
 	// whether the region has polys
-	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bEmptyLocally = false;
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bEmptyLocally = true;
 
 	// has the region been meshed on the server
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bReadyServer = false;
-	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bEmptyServer = false;
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bEmptyServer = true;
 private:
 	bool bSectionExists[MAX_MATERIALS];
 };

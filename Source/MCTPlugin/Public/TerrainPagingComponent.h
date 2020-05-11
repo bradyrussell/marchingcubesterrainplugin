@@ -30,8 +30,10 @@ public:
 	int32 ExpectedRegions = 0;
 	bool bIsPreparingTeleport = false;
 	
-	TSet<FIntVector> subscribedRegions;
-	TSet<FIntVector> waitingForPackets;
+	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) TSet<FIntVector> subscribedRegions;
+	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) TSet<FIntVector> waitingForPackets;
+	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere, Replicated) int32 DebugWaitingForAmount = 0;
+
 
 	FVector GetPagingLocation() const;
 	
