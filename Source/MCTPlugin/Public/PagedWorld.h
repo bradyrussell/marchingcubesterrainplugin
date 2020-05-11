@@ -63,8 +63,6 @@ public:
 	void Tick(float DeltaTime) override;
 	//debug
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
-	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ClientDownloadedRegions; // todo remove
-	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ServerGeneratedRegions; // todo remove
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsToSendOrResendToSubscribersNextExtraction;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsReadyToSendOrResend;
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void ResendRegion(FIntVector region);
@@ -158,7 +156,7 @@ public:
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;// todo replace with below
-	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TSet<FIntVector> RegionsCurrentlyGenerating;
+
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FRegionGenerated RegionGenerated_Event;
 	//WorldGeneratorBase * WorldGenerationProvider;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;

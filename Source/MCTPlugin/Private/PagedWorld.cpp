@@ -100,9 +100,6 @@ void APagedWorld::WorldNewRegionsTick() {
 				}
 			}
 			remainingRegionsToGenerate--;
-			RegionsCurrentlyGenerating.Remove(gen.pos);
-			ServerGeneratedRegions.Emplace(gen.pos);
-			UE_LOG(LogVoxelWorld, Warning, TEXT("Finished worldgen for region [%s] Marking for resend."), *gen.pos.ToString());
 
 			if(!gen.bIsEmpty) {
 				bool needed = false;
@@ -138,8 +135,6 @@ void APagedWorld::VoxelNetClientTick() {
 			Packet::RegionData data;
 			client->downloadedRegions.Dequeue(data);
 
-			ClientDownloadedRegions.Emplace(FIntVector(data.x,data.y,data.z));
-			
 			for (int x = 0; x < REGION_SIZE; x++) {
 				for (int y = 0; y < REGION_SIZE; y++) {
 					for (int z = 0; z < REGION_SIZE; z++) {
@@ -157,14 +152,11 @@ void APagedWorld::VoxelNetServerTick() {
 		FPacketTaskOutput output;
 		VoxelNetServer_packetQueue.Dequeue(output);
 		VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
-
-		UE_LOG(LogVoxelWorld, Warning, TEXT("Generated and cached packet for region [%s] %d."),*output.region.ToString(), output.packet.Num());
 		
 		if(!output.bIsEmpty) { // we only request non air regions to be resent
 			if(PacketsToSendOrResendToSubscribersNextExtraction.Contains(output.region)) {
 				PacketsReadyToSendOrResend.Emplace(output.region);
 				PacketsToSendOrResendToSubscribersNextExtraction.Remove(output.region);
-				UE_LOG(LogVoxelWorld, Warning, TEXT("Force (re)sending region [%s]."), *output.region.ToString());
 			}
 		}
 
@@ -236,7 +228,6 @@ void APagedWorld::Tick(float DeltaTime) {
 			if(PacketsReadyToSendOrResend.Contains(gen.region)) {
 				ForceSendRegions.Emplace(gen.region);
 				PacketsReadyToSendOrResend.Remove(gen.region);
-				UE_LOG(LogVoxelWorld, Warning, TEXT("Force (re)sending region NOW [%s]."), *gen.region.ToString()); /// todo this should be after packets deuque not this
 			}
 			
 			if (reg != nullptr) {
@@ -273,11 +264,6 @@ void APagedWorld::Tick(float DeltaTime) {
 					// where waitingFor and the cache intersect send packets					
 					packets.Add(packetToSend);
 					hits.Emplace(waitingFor);
-
-					if(ForceSendRegions.Contains(waitingFor)){
-						UE_LOG(LogVoxelWorld, Warning, TEXT("Re sent region [%s] %d."), *waitingFor.ToString(), packetToSend.Num());
-						//PacketsToSendOrResendToSubscribersNextExtraction.Remove(waitingFor); // todo remove this asssumes one player
-					}
 				}
 
 				// send packets to the pager's owner
@@ -447,8 +433,6 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 		UGameplayStatics::FinishSpawningActor(region, FTransform(FRotator::ZeroRotator, fpos));
 
 		regions.Add(pos, region);
-
-		//MarkRegionDirtyAndAdjacent(pos); // What is the purpose of this?
 		return region;
 	}
 	catch (...) {
@@ -561,7 +545,7 @@ void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uin
 void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		remainingRegionsToGenerate++;
-		RegionsCurrentlyGenerating.Emplace(RegionCoords);
+
 		//UE_LOG(LogVoxelWorld, Warning, TEXT("Starting worldgen for region [%s]."), *RegionCoords.ToString());
 		
 		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, RegionCoords))->StartBackgroundTask(VoxelWorldThreadPool);
