@@ -46,5 +46,5 @@ public:
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bReadyServer = false;
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bEmptyServer = true;
 private:
-	bool bSectionExists[MAX_MATERIALS];
+	TArray<bool> bSectionExists;
 };

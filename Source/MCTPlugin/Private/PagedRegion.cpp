@@ -11,6 +11,8 @@ APagedRegion::APagedRegion() {
 
 	bReplicates = true;
 	bAlwaysRelevant = true; // we manage our own culling
+
+	bSectionExists.AddDefaulted(World->TerrainMaterials.Num());
 }
 
 void APagedRegion::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
