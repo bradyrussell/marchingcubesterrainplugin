@@ -19,6 +19,8 @@ namespace ExtractionThreads {
 		}
 
 		void DoWork() {
+			bool bDidLock = false;
+			
 			try{
 			FExtractionTaskOutput output;
 			output.section.AddDefaulted(world->TerrainMaterials.Num());
@@ -27,13 +29,16 @@ namespace ExtractionThreads {
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE,
 			                                                 lower.Z + REGION_SIZE));
-			
-			world->VolumeMutex.Lock();
 				
+			world->VolumeMutex.Lock();
+			bDidLock = true;
 			//UE_LOG(LogVoxelWorld, Warning, TEXT("Capturing voxels to make packet [%s]."), *lower.ToString());
 				
-			if(!world->VoxelVolume.IsValid()) return;
-			
+			if(!world->VoxelVolume.IsValid()) { // best to check its still valid after lock
+				world->VolumeMutex.Unlock();
+				return;
+			}
+				
 			if (world->bIsVoxelNetServer) {
 				/*
 										   *    We generate the packet in the extraction thread because: 
@@ -74,7 +79,7 @@ namespace ExtractionThreads {
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 			}
 			// end packet generation
-			
+				
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
 			world->VolumeMutex.Unlock();
 
@@ -136,10 +141,11 @@ namespace ExtractionThreads {
 			world->extractionQueue.Enqueue(output);
 				}
 			catch (std::exception e) {
-				
+					if(bDidLock) world->VolumeMutex.Unlock();
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s] [%s]."), *lower.ToString(), *FString(e.what()))
 				}
 			catch (...) {
+				if(bDidLock) world->VolumeMutex.Unlock();
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s]."), *lower.ToString())
 				}
 		}

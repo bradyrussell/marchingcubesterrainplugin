@@ -41,7 +41,7 @@ void APagedWorld::BeginPlay() {
 	
 	const int32 NUMBER_OF_POOLS = 1;
 	//const int32 NumCoresPerPool = bShareCores ? FPlatformMisc::NumberOfCoresIncludingHyperthreads() : FPlatformMisc::NumberOfCoresIncludingHyperthreads() / NUMBER_OF_POOLS;
-	const int32 NumCoresPerPool = 2; // todo testing
+	const int32 NumCoresPerPool = 4; // todo testing
 	VoxelWorldThreadPool->Create(NumCoresPerPool, 256 * 1024); // thread pool for extraction and worldgen tasks
 
 	//URuntimeMesh::InitializeMultiThreading(NumCoresPerPool); // thread pool for RMC //// currently runs stuff that throws a check (IsInGameThread()) so useless
@@ -314,8 +314,8 @@ void APagedWorld::ClearPinnedRegions() { ForceLoadedRegions.Reset(); }
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		bHasStarted = true;
-		//WorldStorageProvider = new StorageProviderLevelDB(true);
-		WorldStorageProvider = new StorageProviderFlatfile();
+		WorldStorageProvider = new StorageProviderLevelDB(true);
+		//WorldStorageProvider = new StorageProviderFlatfile();
 		//WorldStorageProvider = new StorageProviderTMap(true);
 		//WorldStorageProvider = new StorageProviderNull();
 
@@ -346,6 +346,7 @@ void APagedWorld::PostInitializeComponents() {
 	Super::PostInitializeComponents();
 	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), VolumeTargetMemoryMB * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
+	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this)));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 2 * 1024 * 1024 * 1024,REGION_SIZE));
 }
 
