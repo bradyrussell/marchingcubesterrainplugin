@@ -12,6 +12,7 @@ APagedRegion::APagedRegion() {
 	bReplicates = true;
 	bAlwaysRelevant = true; // we manage our own culling
 
+	if(World)
 	bSectionExists.AddDefaulted(World->TerrainMaterials.Num());
 }
 
