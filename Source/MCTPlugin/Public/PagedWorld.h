@@ -70,7 +70,7 @@ public:
 	// if true, creates CORE_COUNT threads per pool, if false CORE_COUNT / POOL_NUM per pool
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bShareCores; // dont know which would be faster
 	
-	FQueuedThreadPool *VoxelWorldThreadPool;
+	FQueuedThreadPool* VoxelWorldThreadPool;
 	
 	/* World */
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
@@ -171,7 +171,7 @@ public:
 	
 	/* Rendering */
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) bool bRenderMarchingCubes = false;
-	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) TArray<UMaterialInterface*> TerrainMaterials;
+	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditDefaultsOnly) TArray<UMaterialInterface*> TerrainMaterials;
 	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void QueueRegionRender(FIntVector pos);
 	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
 	TSet<FIntVector> dirtyRegions;// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created

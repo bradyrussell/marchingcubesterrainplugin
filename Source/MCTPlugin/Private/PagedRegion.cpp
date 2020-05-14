@@ -11,9 +11,6 @@ APagedRegion::APagedRegion() {
 
 	bReplicates = true;
 	bAlwaysRelevant = true; // we manage our own culling
-
-	if(World)
-	bSectionExists.AddDefaulted(World->TerrainMaterials.Num());
 }
 
 void APagedRegion::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
@@ -31,20 +28,26 @@ void APagedRegion::BeginPlay() {
 
 	GetRuntimeMeshComponent()->Initialize(StaticProvider);
 
-	for (int i = 0; i < World->TerrainMaterials.Num(); i++) { StaticProvider->SetupMaterialSlot(i, FName(*FString::FromInt(i)), World->TerrainMaterials[i]); }
-
-	FRuntimeMeshCollisionSettings CollisionSettings;
-	CollisionSettings.bUseAsyncCooking = World->bUseAsyncCollision;
-	CollisionSettings.bUseComplexAsSimple = true;
-
-	StaticProvider->SetCollisionSettings(CollisionSettings);
-
-	//this is meant to allow the regions map to be replicated
 	if (World){
+		bSectionExists.AddDefaulted(World->TerrainMaterials.Num());
+		
+		for (int i = 0; i < World->TerrainMaterials.Num(); i++) { StaticProvider->SetupMaterialSlot(i, FName(*FString::FromInt(i)), World->TerrainMaterials[i]); }
+
+		FRuntimeMeshCollisionSettings CollisionSettings;
+		CollisionSettings.bUseAsyncCooking = World->bUseAsyncCollision;
+		CollisionSettings.bUseComplexAsSimple = true;
+
+		StaticProvider->SetCollisionSettings(CollisionSettings);
+
+		//this is meant to allow the regions map to be replicated
+	
 		if (!World->bIsVoxelNetServer && !World->bIsVoxelNetSingleplayer) {
 			World->regions.Add(FIntVector(GetRegionLocation()), this);
 			World->dirtyRegions.Emplace(this->GetRegionLocation());
 		}
+	} else {
+		UE_LOG(LogVoxelWorld, Error, TEXT("Region [%s] spawned with an invalid world reference."), *this->GetRegionLocation().ToString());
+		Destroy();
 	}
 }
 
@@ -80,7 +83,7 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 			else {
 				StaticProvider->ClearSection(0, Material);
 				
-				//StaticProvider->MarkCollisionDirty(); do we need one here?
+				StaticProvider->MarkCollisionDirty(); 
 				bSectionExists[Material] = false;
 			}
 		}
