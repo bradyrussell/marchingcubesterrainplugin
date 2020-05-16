@@ -52,7 +52,7 @@ protected:
 	void BeginDestroy() override;
 
 	// PIE is not saving properly it just exits immediately without cleaning anything up...
-	void SaveAndShutdown();
+	
 
 	bool bHasStarted = false;
 	bool bHasShutdown = false;
@@ -60,6 +60,7 @@ protected:
 
 
 public:
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) virtual void SaveAndShutdown();
 	void Tick(float DeltaTime) override;
 	//debug
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
@@ -186,6 +187,7 @@ public:
 	/* Voxelnet Server */
 	UFUNCTION(Category = "Voxel World|Networking|Server", BlueprintCallable)bool VoxelNetServer_StartServer();
 	UFUNCTION(Category = "Voxel World|Networking|Server", BlueprintCallable) void RegisterPlayerWithCookie(APlayerController* player, int64 cookie);
+	UFUNCTION(Category = "Voxel World|Networking|Server", BlueprintCallable) void DisconnectPlayerFromVoxelNet(APlayerController* player);
 	bool VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets);
 	TMap<FIntVector, TArray<uint8>> VoxelNetServer_regionPackets;
 	TQueue<FPacketTaskOutput, EQueueMode::Mpsc> VoxelNetServer_packetQueue;

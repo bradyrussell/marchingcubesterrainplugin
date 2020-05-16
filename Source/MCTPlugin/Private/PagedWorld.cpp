@@ -358,6 +358,7 @@ void APagedWorld::BeginDestroy() {
 void APagedWorld::SaveAndShutdown() {
 	if (bHasShutdown || !bHasStarted)
 		return;
+	
 	bHasShutdown = true;
 	VoxelWorldThreadPool->Destroy();
 
@@ -1224,6 +1225,13 @@ void APagedWorld::RegisterPlayerWithCookie(APlayerController* player, int64 cook
 	}
 }
 
+void APagedWorld::DisconnectPlayerFromVoxelNet(APlayerController* player) {
+	if(VoxelNetServer_PlayerVoxelServers.Contains(player)) {
+		auto ServerForClient = VoxelNetServer_PlayerVoxelServers.FindAndRemoveChecked(player);
+		if(ServerForClient.IsValid()) ServerForClient.Get()->Stop();
+	}
+}
+
 
 WorldPager::WorldPager(APagedWorld* World)
 	: world(World) {
@@ -1235,7 +1243,6 @@ void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<Poly
 		const auto bRegionExists = world->WorldStorageProvider->GetRegion(pos, pChunk);
 		if (!bRegionExists) { world->BeginWorldGeneration(pos); }
 	}
-	return;
 }
 
 void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {

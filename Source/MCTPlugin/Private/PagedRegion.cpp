@@ -77,7 +77,8 @@ void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
 					                                            output.section[Material].UV0,
 					                                            output.section[Material].Colors, output.section[Material].Tangents);
 
-					StaticProvider->MarkCollisionDirty();
+					StaticProvider->MarkCollisionDirty(); // does it matter that i call this numerous time? i assume not because they are all in succession
+						// if it does I can change it to a function scope bNeedsMarkedDirty since it applies for the whole provider not just the section
 				}
 			}
 			else {
