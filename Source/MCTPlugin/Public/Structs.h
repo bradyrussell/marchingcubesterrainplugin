@@ -41,7 +41,7 @@ struct FPolyVoxVector : public FVector {
 };
 
 USTRUCT(BlueprintType)
-	struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
+struct FExtractionTaskSection // results of surface extraction and decoding, to be plugged into updatemesh
 {
 	GENERATED_BODY()
 	TArray<FVector> Vertices = TArray<FVector>();
@@ -53,7 +53,7 @@ USTRUCT(BlueprintType)
 };
 
 USTRUCT(BlueprintType)
-	struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
+struct FExtractionTaskOutput // results of surface extraction and decoding, to be plugged into updatemesh
 {
 	GENERATED_BODY()
 	bool bIsEmpty = false;
@@ -62,7 +62,7 @@ USTRUCT(BlueprintType)
 };
 
 USTRUCT(BlueprintType)
-	struct FPacketTaskOutput // compressed packet information for a region
+struct FPacketTaskOutput // compressed packet information for a region
 {
 	GENERATED_BODY()
 	FIntVector region;
@@ -71,7 +71,7 @@ USTRUCT(BlueprintType)
 };
 
 USTRUCT(BlueprintType)
-	struct FVoxelUpdate // a change of a group of voxels from any type to a single new type
+struct FVoxelUpdate // a change of a group of voxels from any type to a single new type
 {
 	GENERATED_BODY()
 	FVoxelUpdate() {
@@ -111,7 +111,7 @@ USTRUCT(BlueprintType)
 
 
 USTRUCT(BlueprintType)
-	struct FWorldGenerationTaskOutput // 
+struct FWorldGenerationTaskOutput // 
 {
 	GENERATED_BODY()
 
@@ -124,7 +124,7 @@ USTRUCT(BlueprintType)
 };
 
 USTRUCT(BlueprintType)
-	struct FPendingHandshake // 
+struct FPendingHandshake // 
 {
 	GENERATED_BODY()
 
@@ -134,48 +134,45 @@ USTRUCT(BlueprintType)
 };
 
 
- struct FVoxelWorldSaveGameArchive : public FObjectAndNameAsStringProxyArchive
- {
-     FVoxelWorldSaveGameArchive(FArchive& InInnerArchive)
-         :   FObjectAndNameAsStringProxyArchive(InInnerArchive, false)
-     { 
-         ArIsSaveGame = true;
-     	ArNoDelta = true;
-     }
- };
-
+struct FVoxelWorldSaveGameArchive : public FObjectAndNameAsStringProxyArchive {
+	FVoxelWorldSaveGameArchive(FArchive& InInnerArchive)
+		: FObjectAndNameAsStringProxyArchive(InInnerArchive, false) {
+		ArIsSaveGame = true;
+		ArNoDelta = true;
+	}
+};
 
 
 USTRUCT()
- struct FVoxelWorldComponentRecord {
+struct FVoxelWorldComponentRecord {
 	GENERATED_USTRUCT_BODY()
-	
+
 	FString ComponentClass;
 	FTransform ComponentTransform;
 	TArray<uint8> ComponentData;
 	bool bSpawnIfNotFound;
 
-		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldComponentRecord& Record){
+	friend FArchive& operator<<(FArchive& Ar, FVoxelWorldComponentRecord& Record) {
 		Ar << Record.ComponentClass;
 		Ar << Record.ComponentTransform;
 		Ar << Record.ComponentData;
 		Ar << Record.bSpawnIfNotFound;
 		return Ar;
 	}
-	
- };
+
+};
 
 USTRUCT()
- struct FVoxelWorldActorRecord {
+struct FVoxelWorldActorRecord {
 	GENERATED_USTRUCT_BODY()
-	
+
 	FString ActorClass;
 	FTransform ActorTransform;
 	TArray<FVoxelWorldComponentRecord> ActorComponents;
 	TArray<uint8> ActorData;
 	int64 PersistentActorID;
 
-		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldActorRecord& Record){
+	friend FArchive& operator<<(FArchive& Ar, FVoxelWorldActorRecord& Record) {
 		Ar << Record.ActorClass;
 		Ar << Record.ActorTransform;
 		Ar << Record.ActorComponents;
@@ -183,21 +180,21 @@ USTRUCT()
 		Ar << Record.PersistentActorID;
 		return Ar;
 	}
-	
- };
+
+};
 
 USTRUCT()
- struct FVoxelWorldPlayerActorRecord {
+struct FVoxelWorldPlayerActorRecord {
 	GENERATED_USTRUCT_BODY()
-	
+
 	FString ActorClass;
 	FDateTime SavedAt;
 	FTransform ActorTransform;
 	TArray<FVoxelWorldComponentRecord> ActorComponents;
 	TArray<uint8> ActorData;
-	
 
-		friend FArchive& operator<<(FArchive& Ar, FVoxelWorldPlayerActorRecord& Record){
+
+	friend FArchive& operator<<(FArchive& Ar, FVoxelWorldPlayerActorRecord& Record) {
 		Ar << Record.ActorClass;
 		Ar << Record.SavedAt;
 		Ar << Record.ActorTransform;
@@ -205,5 +202,5 @@ USTRUCT()
 		Ar << Record.ActorData;
 		return Ar;
 	}
-	
- };
+
+};

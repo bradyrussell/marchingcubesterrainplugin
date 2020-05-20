@@ -314,8 +314,8 @@ void APagedWorld::ClearPinnedRegions() { ForceLoadedRegions.Reset(); }
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		bHasStarted = true;
-		WorldStorageProvider = new StorageProviderLevelDB(true);
-		//WorldStorageProvider = new StorageProviderFlatfile();
+		//WorldStorageProvider = new StorageProviderLevelDB(true);
+		WorldStorageProvider = new StorageProviderFlatfile();
 		//WorldStorageProvider = new StorageProviderTMap(true);
 		//WorldStorageProvider = new StorageProviderNull();
 
@@ -339,6 +339,8 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 
 		reader.Flush();
 		reader.Close();
+
+		if(NextPersistentActorID <= 0) NextPersistentActorID = 1;
 	}
 }
 
@@ -556,7 +558,7 @@ void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 
 float APagedWorld::GetHeightmapZ(int32 VoxelX, int32 VoxelY, uint8 HeightmapIndex) { return GetNoiseGeneratorArray()[HeightmapIndex]->GetNoise2D(VoxelX, VoxelY); }
 
-int32 APagedWorld::getVolumeMemoryBytes() const { return VoxelVolume.Get()->calculateSizeInBytes(); }
+int32 APagedWorld::getVolumeMemoryBytes() const { return VoxelVolume.IsValid() ? VoxelVolume.Get()->calculateSizeInBytes() : -1; }
 
 void APagedWorld::Flush() const { VoxelVolume.Get()->flushAll(); }
 
@@ -734,13 +736,13 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 						FVoxelWorldSaveGameArchive Ar(MemoryReader);
 						NewActor->Serialize(Ar);
 
-						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
-
 						if(record.PersistentActorID != 0) {
 							RegisterExistingPersistentActor(NewActor, record.PersistentActorID);
 							UE_LOG(LogTemp, Warning, TEXT("Loaded persistent actor id %d"), (int32)record.PersistentActorID);
 						}
 						
+						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
+
 						////
 						//////////////////
 						/// do components
@@ -759,9 +761,11 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 							}
 
 							TArray<UActorComponent*> outComps;
-							NewActor->GetComponents(compClass, outComps);
+							NewActor->GetComponents(compClass, outComps); // get components of the class we are loading
 
-							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d components on actor %s"), outComps.Num(), *NewActor->GetHumanReadableName());
+							UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Trying to resolve component record %s on actor %s"), *compRecord.ComponentClass , *NewActor->GetHumanReadableName());
+							
+							UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] There are %d  %s components on actor %s"), outComps.Num(),*compRecord.ComponentClass , *NewActor->GetHumanReadableName());
 
 							UActorComponent* currentComp = nullptr;
 
@@ -770,13 +774,18 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 								if (!processedComps.Contains(elem)) {
 									currentComp = elem;
 									processedComps.Add(elem);
+									UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Found this comp %s"), *elem->GetReadableName());
+									break;
+								} else {
+									UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Already seen this comp %s"), *elem->GetReadableName());
 								}
 							}
-
+							
 							if (!currentComp) {
-								UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Failed to find component %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
+								UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Failed to find component %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
 								if (compRecord.bSpawnIfNotFound) {
 									// spawn it
+									check(false);//not implemented
 								}
 								else { continue; }
 							}
@@ -785,13 +794,14 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 								UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded component %s  %d B data %s."), *compRecord.ComponentClass, compRecord.ComponentData.Num(),
 								       *BytesToHex(compRecord.ComponentData.GetData(),compRecord.ComponentData.Num()));
 
-								USceneComponent* SceneComp = Cast<USceneComponent>(currentComp);
-								if (SceneComp) { SceneComp->SetRelativeTransform(compRecord.ComponentTransform); }
+								//USceneComponent* SceneComp = Cast<USceneComponent>(currentComp);
+								//if (SceneComp) { SceneComp->SetRelativeTransform(compRecord.ComponentTransform); } // todo revisit
 
 								FMemoryReader compMemoryReader(compRecord.ComponentData, true);
 								FVoxelWorldSaveGameArchive compAr(compMemoryReader);
 								currentComp->Serialize(compAr);
 								UE_LOG(LogVoxelDatabase, Verbose, TEXT("--------------- Component Class %s loaded"), *compRecord.ComponentClass);
+								IISavableComponent::Execute_OnLoaded(currentComp);
 							}
 						}
 
@@ -1097,6 +1107,8 @@ int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
 }
 
 int64 APagedWorld::LookupPersistentActorID(AActor* Actor) {
+	if(LivePersistentActors.Num() <= 0) return 0;
+	
 	auto Key = LivePersistentActors.FindKey(Actor);
 	if(Key) {
 		return *Key;
