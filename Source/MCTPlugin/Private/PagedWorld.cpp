@@ -738,7 +738,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 
 						if(record.PersistentActorID != 0) {
 							RegisterExistingPersistentActor(NewActor, record.PersistentActorID);
-							UE_LOG(LogTemp, Warning, TEXT("Loaded persistent actor id %d"), (int32)record.PersistentActorID);
+							//UE_LOG(LogTemp, Warning, TEXT("Loaded persistent actor id %d"), (int32)record.PersistentActorID);
 						}
 						
 						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
@@ -763,9 +763,9 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 							TArray<UActorComponent*> outComps;
 							NewActor->GetComponents(compClass, outComps); // get components of the class we are loading
 
-							UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Trying to resolve component record %s on actor %s"), *compRecord.ComponentClass , *NewActor->GetHumanReadableName());
+							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Trying to resolve component record %s on actor %s"), *compRecord.ComponentClass , *NewActor->GetHumanReadableName());
 							
-							UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] There are %d  %s components on actor %s"), outComps.Num(),*compRecord.ComponentClass , *NewActor->GetHumanReadableName());
+							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d  %s components on actor %s"), outComps.Num(),*compRecord.ComponentClass , *NewActor->GetHumanReadableName());
 
 							UActorComponent* currentComp = nullptr;
 
@@ -774,10 +774,10 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 								if (!processedComps.Contains(elem)) {
 									currentComp = elem;
 									processedComps.Add(elem);
-									UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Found this comp %s"), *elem->GetReadableName());
+									UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Found this comp %s"), *elem->GetReadableName());
 									break;
 								} else {
-									UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Already seen this comp %s"), *elem->GetReadableName());
+									UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Already seen this comp %s"), *elem->GetReadableName());
 								}
 							}
 							
