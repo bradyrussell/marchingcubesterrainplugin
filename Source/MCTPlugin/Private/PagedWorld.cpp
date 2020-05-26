@@ -18,6 +18,7 @@
 #include "ISavableComponent.h"
 #include "MCTPlugin.h"
 #include "StorageProviderFlatfile.h"
+#include "Net/UnrealNetwork.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -45,7 +46,10 @@ void APagedWorld::BeginPlay() {
 	VoxelWorldThreadPool->Create(NumCoresPerPool, 256 * 1024); // thread pool for extraction and worldgen tasks
 
 	//URuntimeMesh::InitializeMultiThreading(NumCoresPerPool); // thread pool for RMC //// currently runs stuff that throws a check (IsInGameThread()) so useless
-
+	FRandomStream Rand(WorldSeed);
+	RegionSeedRandomX = Rand.GetUnsignedInt();
+	RegionSeedRandomY = Rand.GetUnsignedInt();
+	RegionSeedRandomZ = Rand.GetUnsignedInt();
 }
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) { SaveAndShutdown(); }
@@ -329,18 +333,29 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 		UE_LOG(LogVoxelDatabase, Warning, TEXT("Database version for %s: %d. %s"), *Name, WorldStorageProvider->GetDatabaseFormat(), compatible? TEXT("Version is compatible.") : TEXT("Version is NOT compatible! Cannot load data."));
 		ensure(compatible);
 
+		TArray<uint8> propertiesBytes;
+		if(WorldStorageProvider->GetGlobalData("WorldProperties", propertiesBytes)){
+			FMemoryReader reader(propertiesBytes,true);
+
+			reader << WorldSeed;
+
+			reader.Flush();
+			reader.Close();
+		}
+		
 		// this might not be the best place for this but
-		TArray<uint8> bytes;
-		WorldStorageProvider->GetGlobalData("NextPersistentActorID", bytes);
+		TArray<uint8> PIDbytes;
+		if(WorldStorageProvider->GetGlobalData("NextPersistentActorID", PIDbytes)){
+			
+			FMemoryReader reader(PIDbytes,true);
 
-		FMemoryReader reader(bytes,true);
+			reader << NextPersistentActorID;
 
-		reader << NextPersistentActorID;
+			reader.Flush();
+			reader.Close();
 
-		reader.Flush();
-		reader.Close();
-
-		if(NextPersistentActorID <= 0) NextPersistentActorID = 1;
+			if(NextPersistentActorID <= 0) NextPersistentActorID = 1;
+		}
 	}
 }
 
@@ -392,6 +407,16 @@ void APagedWorld::SaveAndShutdown() {
 	PreSaveWorld();
 
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
+		TArray<uint8> worldProperties;
+		FMemoryWriter writer(worldProperties);
+
+		writer << WorldSeed;
+
+		writer.Flush();
+		writer.Close();
+		
+		WorldStorageProvider->PutGlobalData("WorldProperties", worldProperties);
+		
 		UE_LOG(LogVoxelDatabase, Warning, TEXT("Saving data for regions..."));
 		UnloadRegionsExcept(TSet<FIntVector>()); // force save all entities
 		UE_LOG(LogVoxelDatabase, Warning, TEXT("Regional data saved."));
@@ -556,6 +581,10 @@ void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	}
 }
 
+int32 APagedWorld::GetRegionSeed(FIntVector RegionCoords) { // inpsired by minecraft
+	return (RegionCoords.X * RegionSeedRandomX + RegionCoords.Y * RegionSeedRandomY + RegionCoords.Z * RegionSeedRandomZ) ^ WorldSeed;
+}
+
 float APagedWorld::GetHeightmapZ(int32 VoxelX, int32 VoxelY, uint8 HeightmapIndex) { return GetNoiseGeneratorArray()[HeightmapIndex]->GetNoise2D(VoxelX, VoxelY); }
 
 int32 APagedWorld::getVolumeMemoryBytes() const { return VoxelVolume.IsValid() ? VoxelVolume.Get()->calculateSizeInBytes() : -1; }
@@ -564,13 +593,13 @@ void APagedWorld::Flush() const { VoxelVolume.Get()->flushAll(); }
 
 void APagedWorld::LaunchServer() {
 	bIsVoxelNetServer = true;
-	ConnectToDatabase("WorldDatabase");
+	ConnectToDatabase(WorldName);
 	VoxelNetServer_StartServer();
 }
 
 void APagedWorld::LaunchSingleplayer() {
 	bIsVoxelNetSingleplayer = true;
-	ConnectToDatabase("WorldDatabase");
+	ConnectToDatabase(WorldName);
 }
 
 void APagedWorld::LaunchClient(FString Host, int32 Port) { VoxelNetClient_ConnectToServer(Host, Port); }
@@ -1367,3 +1396,10 @@ int32 APagedWorld::VoxelNetClient_GetPendingRegionDownloads() const {
 	}
 	return -1;
 }
+
+void APagedWorld::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(APagedWorld, WorldSeed);
+}
+

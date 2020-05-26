@@ -86,6 +86,8 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable, Server, Reliable, WithValidation) void Server_ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event") FVoxelWorldUpdate VoxelWorldUpdate_Event;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bUseAsyncCollision = true;
+	UPROPERTY(Category = "Voxel World|Seed",BlueprintReadWrite, EditAnywhere, Replicated) int32 WorldSeed;
+	UPROPERTY(Category = "Voxel World|Name",BlueprintReadWrite, EditAnywhere) FString WorldName = "WorldDatabase";
 	TSharedPtr<PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>> VoxelVolume;
 	// lock for VoxelVolume
 	FCriticalSection VolumeMutex; 
@@ -149,6 +151,7 @@ public:
 	/* Generation */
 	UFUNCTION(BlueprintImplementableEvent) const TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray(); 
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void BeginWorldGeneration(FIntVector RegionCoords);
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) int32 GetRegionSeed(FIntVector RegionCoords);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable, BlueprintAuthorityOnly) float GetHeightmapZ(int32 VoxelX, int32 VoxelY, uint8 HeightmapIndex = 0);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(FIntVector pos, int32 radius) const;
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
@@ -157,6 +160,9 @@ public:
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TMap<FIntVector, APagedRegion*> regions;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) TArray<UTerrainPagingComponent*> pagingComponents;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 remainingRegionsToGenerate = 0;// todo replace with below
+	int32 RegionSeedRandomX;
+	int32 RegionSeedRandomY;
+	int32 RegionSeedRandomZ;
 
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FRegionGenerated RegionGenerated_Event;
 	//WorldGeneratorBase * WorldGenerationProvider;
