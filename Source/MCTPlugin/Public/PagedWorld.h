@@ -22,11 +22,11 @@
 class APagedRegion;
 class UTerrainPagingComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial, const bool, bShouldDrop);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FVoxelWorldUpdate, class AActor*, CauseActor, const FIntVector&, voxelLocation, const uint8, oldMaterial, const uint8, newMaterial, const bool, bShouldDrop);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVoxelNetHandshake,const int64, cookie);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPreSaveWorld,const bool, isQuitting);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPostSaveWorld,const bool, isQuitting);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRegionGenerated,const FIntVector, Region);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRegionGenerated,const FIntVector&, Region);
 
 
 #ifdef WORLD_TICK_TRACKING
@@ -63,10 +63,10 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) virtual void SaveAndShutdown();
 	void Tick(float DeltaTime) override;
 	//debug
-	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(FIntVector Region);
+	UFUNCTION(Category = "Voxel World|Saving", BlueprintImplementableEvent) void OnRegionError(const FIntVector& Region);
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsToSendOrResendToSubscribersNextExtraction;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsReadyToSendOrResend;
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) void ResendRegion(FIntVector region);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) void ResendRegion(const FIntVector& region);
 	// save as much data as possible to mitigate crash
 	virtual void OnFatalError();
 
@@ -76,16 +76,16 @@ public:
 	FQueuedThreadPool* VoxelWorldThreadPool;
 	
 	/* World */
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(FIntVector pos);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyServer(FIntVector pos);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(FIntVector pos);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyServer(FIntVector pos);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyLocal(FIntVector pos);
-	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(FIntVector VoxelCoords);
-	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(FVector WorldCoords);
-	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(FIntVector VoxelCoords);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable, NetMulticast, Reliable) void Multi_ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
-	UFUNCTION(Category = "Voxel World", BlueprintCallable, Server, Reliable, WithValidation) void Server_ModifyVoxel(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) APagedRegion* getRegionAt(const FIntVector& pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyServer(const FIntVector& pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(const FIntVector& pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyServer(const FIntVector& pos);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyLocal(const FIntVector& pos);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(const FIntVector& VoxelCoords);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(const FVector& WorldCoords);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(const FIntVector& VoxelCoords);
+	UFUNCTION(Category = "Voxel World", BlueprintCallable, NetMulticast, Reliable) void Multi_ModifyVoxel(const FIntVector& VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
+	//UFUNCTION(Category = "Voxel World", BlueprintCallable, Server, Reliable, WithValidation) void Server_ModifyVoxel(const FIntVector& VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event") FVoxelWorldUpdate VoxelWorldUpdate_Event;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bUseAsyncCollision = true;
 	UPROPERTY(Category = "Voxel World|Seed",BlueprintReadWrite, EditAnywhere, Replicated) int32 WorldSeed;
@@ -96,8 +96,8 @@ public:
 	TQueue<FVoxelUpdate, EQueueMode::Mpsc> voxelUpdateQueue;
 	//These regions will remain pinned 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> ForceLoadedRegions; 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void PinRegionsInRadius(FIntVector VoxelCoords, int32 Radius);
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void UnpinRegionsInRadius(FIntVector VoxelCoords, int32 Radius);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void PinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radius);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void UnpinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radius);
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void ClearPinnedRegions();
 	
 	/* Database */
@@ -152,10 +152,10 @@ public:
 	
 	/* Generation */
 	UFUNCTION(BlueprintImplementableEvent) const TArray<UUFNNoiseGenerator*> GetNoiseGeneratorArray(); 
-	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void BeginWorldGeneration(FIntVector RegionCoords);
-	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) int32 GetRegionSeed(FIntVector RegionCoords);
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void BeginWorldGeneration(const FIntVector& RegionCoords);
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) int32 GetRegionSeed(const FIntVector& RegionCoords);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable, BlueprintAuthorityOnly) float GetHeightmapZ(int32 VoxelX, int32 VoxelY, uint8 HeightmapIndex = 0);
-	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(FIntVector pos, int32 radius) const;
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(const FIntVector& pos, int32 radius) const;
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PagingComponentTick();
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
@@ -181,8 +181,8 @@ public:
 	/* Rendering */
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditAnywhere) bool bRenderMarchingCubes = false;
 	UPROPERTY(Category = "Voxel World|Rendering", BlueprintReadWrite, EditDefaultsOnly) TArray<UMaterialInterface*> TerrainMaterials;
-	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void QueueRegionRender(FIntVector pos);
-	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void MarkRegionDirtyAndAdjacent(FIntVector pos);
+	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void QueueRegionRender(const FIntVector& pos);
+	UFUNCTION(Category = "Voxel World|Rendering", BlueprintCallable) void MarkRegionDirtyAndAdjacent(const FIntVector& pos);
 	TSet<FIntVector> dirtyRegions;// region keys which need redrawn & recooked; either because their voxels were modified or because they were just created
 	TQueue<FExtractionTaskOutput, EQueueMode::Mpsc> extractionQueue;
 	UPROPERTY(Category = "Voxel World|Generation", BlueprintReadOnly, VisibleAnywhere) int32 NumRegionsPendingExtraction = 0;

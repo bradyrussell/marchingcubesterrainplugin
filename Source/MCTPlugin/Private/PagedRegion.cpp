@@ -58,7 +58,7 @@ void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 }
 
 
-void APagedRegion::RenderParsed(FExtractionTaskOutput output) {
+void APagedRegion::RenderParsed(const FExtractionTaskOutput& output) {
 	if (!StaticProvider) { UE_LOG(LogVoxelWorld, Error, TEXT("There is no provider when trying to render parsed.")); }
 
 	// for each LOD level in output
