@@ -24,7 +24,7 @@ public:
 	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
 
 	UFUNCTION(Category = "Paging Component", BlueprintPure) bool ShouldFreezePawn() const;
-	UFUNCTION(Category = "Paging Component", BlueprintCallable) bool PrepareToTeleport(const FVector Destination);
+	UFUNCTION(Category = "Paging Component", BlueprintCallable) bool PrepareToTeleport(const FVector& Destination);
 
 	void OnSentRegionPacket(int Num);
 	int32 ExpectedRegions = 0;

@@ -584,7 +584,7 @@ void APagedWorld::BeginWorldGeneration(const FIntVector& RegionCoords) {
 	}
 }
 
-int32 APagedWorld::GetRegionSeed(const FIntVector& RegionCoords) { // inpsired by minecraft
+int32 APagedWorld::GetRegionSeed(const FIntVector& RegionCoords) { // inspired by minecraft
 	return (RegionCoords.X * RegionSeedRandomX + RegionCoords.Y * RegionSeedRandomY + RegionCoords.Z * RegionSeedRandomZ) ^ WorldSeed;
 }
 

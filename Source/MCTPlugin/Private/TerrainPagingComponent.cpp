@@ -11,7 +11,7 @@ bool UTerrainPagingComponent::ShouldFreezePawn() const {
 	return !bIsConnectedToVoxelnet || bFreezePawn;
 }
 
-bool UTerrainPagingComponent::PrepareToTeleport(const FVector Destination) {
+bool UTerrainPagingComponent::PrepareToTeleport(const FVector& Destination) {
 	bIsPreparingTeleport = true;
 	bFreezePawn = true;
 	OverrideLocation = Destination;

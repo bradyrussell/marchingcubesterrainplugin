@@ -34,7 +34,7 @@ public:
 
 	UFUNCTION(BlueprintCallable) void UpdateNavigation() const;
 	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
-	void RenderParsed(FExtractionTaskOutput output);
+	void RenderParsed(const FExtractionTaskOutput& output);
 
 	// has the region been meshed on the local machine
 	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bReadyLocally = false;

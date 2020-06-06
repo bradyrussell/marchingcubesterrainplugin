@@ -115,7 +115,7 @@ PolyVox::MaterialDensityPair88 Interpret_Biome_Mountains(int32 z, float _height,
 	
 }
 
-PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 z,const TArray<UUFNNoiseGenerator*>& noise) {
 	if (noise.Num() == 0) {
 		UE_LOG(LogTemp, Warning, TEXT("Aborting region generation, cannot access noise."))
 		return PolyVox::MaterialDensityPair88();
@@ -165,7 +165,7 @@ enum {
 	Block_Gunpowder,
 };
 
-PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z, TArray<UUFNNoiseGenerator*> noise) {
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_New(int32 x, int32 y, int32 z,const TArray<UUFNNoiseGenerator*>& noise) {
 	float totalHeight = noise[0]->GetNoise2D(x, y);
 	int32 _height = totalHeight;
 	int32 _density = FMath::FloorToInt(FMath::Abs(totalHeight - _height) * 128.f)+128; // converts the fractional part of the height to a range 128-255
