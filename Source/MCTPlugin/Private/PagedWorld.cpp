@@ -287,7 +287,7 @@ void APagedWorld::Tick(float DeltaTime) {
 #endif
 }
 
-void APagedWorld::PinRegionsInRadius(FIntVector VoxelCoords, int32 Radius) {
+void APagedWorld::PinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radius) {
 	FIntVector pos = VoxelToRegionCoords(VoxelCoords);
 
 	for (int z = -Radius; z < Radius; z++) {
@@ -300,7 +300,7 @@ void APagedWorld::PinRegionsInRadius(FIntVector VoxelCoords, int32 Radius) {
 	}
 }
 
-void APagedWorld::UnpinRegionsInRadius(FIntVector VoxelCoords, int32 Radius) {
+void APagedWorld::UnpinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radius) {
 	FIntVector pos = VoxelToRegionCoords(VoxelCoords);
 
 	for (int z = -Radius; z < Radius; z++) {
@@ -441,14 +441,14 @@ void APagedWorld::SaveAndShutdown() {
 
 void APagedWorld::RegisterPagingComponent(UTerrainPagingComponent* pagingComponent) { pagingComponents.AddUnique(pagingComponent); }
 
-void APagedWorld::ResendRegion(FIntVector region) {
+void APagedWorld::ResendRegion(const FIntVector& region) {
 	PacketsToSendOrResendToSubscribersNextExtraction.Emplace(region);
 }
 
 void APagedWorld::OnFatalError() {
 }
 
-APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
+APagedRegion* APagedWorld::getRegionAt(const FIntVector& pos) {
 	if (regions.Contains(pos))
 		return regions.FindRef(pos);
 
@@ -473,7 +473,7 @@ APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	}
 }
 
-bool APagedWorld::isRegionReadyServer(FIntVector pos) {
+bool APagedWorld::isRegionReadyServer(const FIntVector& pos) {
 	if (regions.Contains(pos)) {
 		auto region = *regions.Find(pos);
 		return region->bReadyServer;
@@ -481,7 +481,7 @@ bool APagedWorld::isRegionReadyServer(FIntVector pos) {
 	return false;
 }
 
-bool APagedWorld::isRegionReadyLocal(FIntVector pos) {
+bool APagedWorld::isRegionReadyLocal(const FIntVector& pos) {
 	if (regions.Contains(pos)) {
 		auto region = *regions.Find(pos);
 		return region->bReadyLocally;
@@ -489,7 +489,7 @@ bool APagedWorld::isRegionReadyLocal(FIntVector pos) {
 	return false;
 }
 
-bool APagedWorld::isRegionEmptyServer(FIntVector pos) {
+bool APagedWorld::isRegionEmptyServer(const FIntVector& pos) {
 	if (regions.Contains(pos)) {
 		auto region = *regions.Find(pos);
 		return region->bEmptyServer;
@@ -519,14 +519,14 @@ void APagedWorld::SetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY, int3
 	}
 }
 
-void APagedWorld::QueueRegionRender(FIntVector pos) {
+void APagedWorld::QueueRegionRender(const FIntVector& pos) {
 	NumRegionsPendingExtraction++;
 
 	if (bRenderMarchingCubes) { (new FAutoDeleteAsyncTask<ExtractionThreads::MarchingCubesExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
 	else { (new FAutoDeleteAsyncTask<ExtractionThreads::CubicExtractionTask>(this, pos))->StartBackgroundTask(VoxelWorldThreadPool); }
 }
 
-void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
+void APagedWorld::MarkRegionDirtyAndAdjacent(const FIntVector& pos) {
 	dirtyRegions.Emplace(pos);
 	dirtyRegions.Emplace(pos + FIntVector(REGION_SIZE, 0, 0));
 	dirtyRegions.Emplace(pos + FIntVector(0, REGION_SIZE, 0));
@@ -537,14 +537,14 @@ void APagedWorld::MarkRegionDirtyAndAdjacent(FIntVector pos) {
 }
 
 
-void APagedWorld::PrefetchRegionsInRadius(FIntVector pos, int32 radius) const {
+void APagedWorld::PrefetchRegionsInRadius(const FIntVector& pos, int32 radius) const {
 	auto reg = PolyVox::Region(pos.X, pos.Y, pos.Z, pos.X + REGION_SIZE, pos.Y + REGION_SIZE, pos.Z + REGION_SIZE);
 	reg.grow(radius * REGION_SIZE);
 	VoxelVolume.Get()->prefetch(reg);
 }
 
 
-bool APagedWorld::isRegionEmptyLocal(FIntVector pos) {
+bool APagedWorld::isRegionEmptyLocal(const FIntVector& pos) {
 		if (regions.Contains(pos)) {
 		auto region = *regions.Find(pos);
 		return region->bEmptyLocally;
@@ -552,29 +552,29 @@ bool APagedWorld::isRegionEmptyLocal(FIntVector pos) {
 	return false;
 }
 
-FIntVector APagedWorld::VoxelToRegionCoords(FIntVector VoxelCoords) {
+FIntVector APagedWorld::VoxelToRegionCoords(const FIntVector& VoxelCoords) {
 	const FVector tmp = FVector(VoxelCoords) / (float)REGION_SIZE;
 	return FIntVector(FMath::FloorToInt(tmp.X), FMath::FloorToInt(tmp.Y), FMath::FloorToInt(tmp.Z)) * 32;
 }
 
-FIntVector APagedWorld::WorldToVoxelCoords(FVector WorldCoords) { return FIntVector(WorldCoords / VOXEL_SIZE); }
+FIntVector APagedWorld::WorldToVoxelCoords(const FVector& WorldCoords) { return FIntVector(WorldCoords / VOXEL_SIZE); }
 
-FVector APagedWorld::VoxelToWorldCoords(FIntVector VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
+FVector APagedWorld::VoxelToWorldCoords(const FIntVector& VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
 
-bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
+/*bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
 	//cause is valid and cause is less than x away , maybe make one without radius because thats usually server side 
 	return true;
 }
 
 void APagedWorld::Server_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
 	Multi_ModifyVoxel(VoxelLocation, Radius, Material, Density, cause, bIsSpherical, bShouldDrop);
-}
+}*/
 
-void APagedWorld::Multi_ModifyVoxel_Implementation(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
+void APagedWorld::Multi_ModifyVoxel_Implementation(const FIntVector& VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
 	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation,Radius, Material, Density, bShouldDrop, bIsSpherical, true, cause));
 }
 
-void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
+void APagedWorld::BeginWorldGeneration(const FIntVector& RegionCoords) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		remainingRegionsToGenerate++;
 
@@ -584,7 +584,7 @@ void APagedWorld::BeginWorldGeneration(FIntVector RegionCoords) {
 	}
 }
 
-int32 APagedWorld::GetRegionSeed(FIntVector RegionCoords) { // inpsired by minecraft
+int32 APagedWorld::GetRegionSeed(const FIntVector& RegionCoords) { // inpsired by minecraft
 	return (RegionCoords.X * RegionSeedRandomX + RegionCoords.Y * RegionSeedRandomY + RegionCoords.Z * RegionSeedRandomZ) ^ WorldSeed;
 }
 
