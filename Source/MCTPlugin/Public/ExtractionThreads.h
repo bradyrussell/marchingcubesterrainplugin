@@ -142,10 +142,12 @@ namespace ExtractionThreads {
 				}
 			catch (std::exception e) {
 					if(bDidLock) world->VolumeMutex.Unlock();
+					world->OnFatalError();
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s] [%s]."), *lower.ToString(), *FString(e.what()))
 				}
 			catch (...) {
-				if(bDidLock) world->VolumeMutex.Unlock();
+					if(bDidLock) world->VolumeMutex.Unlock();
+					world->OnFatalError();
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s]."), *lower.ToString())
 				}
 		}
@@ -289,6 +291,7 @@ namespace ExtractionThreads {
 
 			world->extractionQueue.Enqueue(output);
 				}catch (...) {
+					world->OnFatalError();
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] CubicExtractionTask caught exception extracting [%s]."), *lower.ToString())
 				}
 		}

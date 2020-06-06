@@ -67,6 +67,8 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsToSendOrResendToSubscribersNextExtraction;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) TSet<FIntVector> PacketsReadyToSendOrResend;
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) void ResendRegion(FIntVector region);
+	// save as much data as possible to mitigate crash
+	virtual void OnFatalError();
 
 	// if true, creates CORE_COUNT threads per pool, if false CORE_COUNT / POOL_NUM per pool
 	UPROPERTY(BlueprintReadWrite, EditAnywhere) bool bShareCores; // dont know which would be faster

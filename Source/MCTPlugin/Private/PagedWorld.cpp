@@ -445,6 +445,9 @@ void APagedWorld::ResendRegion(FIntVector region) {
 	PacketsToSendOrResendToSubscribersNextExtraction.Emplace(region);
 }
 
+void APagedWorld::OnFatalError() {
+}
+
 APagedRegion* APagedWorld::getRegionAt(FIntVector pos) {
 	if (regions.Contains(pos))
 		return regions.FindRef(pos);
