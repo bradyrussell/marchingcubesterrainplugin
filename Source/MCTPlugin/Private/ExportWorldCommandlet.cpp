@@ -13,6 +13,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Containers/UnrealString.h"
+#include "Serialization/MemoryReader.h"
+#include "Structs.h"
 
 UExportWorldCommandlet::UExportWorldCommandlet(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer) {
@@ -35,13 +37,7 @@ UExportWorldCommandlet::UExportWorldCommandlet(const FObjectInitializer& ObjectI
 
 // each region is a json file
 // region {
-//	materials: {   where 0: ... is the slice or W 
-//	0: [1,1,1,1,1,4,2,7,3, ...] for x, for y order? or other way around?
-//	1: [1,1,1,1,1,4,2,7,3, ...]
-//	}
-//	densities: {
-//	0: [255,255,255,255,255, ...]
-//	1: [255,255,255,255,255, ...]
+
 //	}
 //	entities: {
 //		[
@@ -75,6 +71,7 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	bool bTerrainUseBase64 = true;
 	bool bDumpRegions = true;
 	bool bDumpTerrain = true;
+	bool bDecodeRegionalData = true;
 
 	if (CmdLineSwitches.Contains("base64"))
 		bUseBase64 = true;
@@ -140,8 +137,7 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	TSharedRef<FJsonObject> RegionsObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsDataObject = MakeShareable(new FJsonObject);
 	
-	StorageProvider->ForEach([this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain](std::string Key, std::string Value) {
-		FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length());
+	StorageProvider->ForEach([this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain, bDecodeRegionalData](std::string Key, std::string Value) {
 
 		/*if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
 		else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }*/
@@ -166,17 +162,84 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 			}
 			else {
 				if (Decoded.W >= REGION_SIZE) {
-					TArray<FStringFormatArg> Args;
-					Args.Emplace(Decoded.X);
-					Args.Emplace(Decoded.Y);
-					Args.Emplace(Decoded.Z);
-					Args.Emplace(Decoded.W);
+					if(bDecodeRegionalData) {
+						TSharedRef<FJsonObject> CurrentRegionObject = MakeShareable(new FJsonObject);
+						
+						TArray<uint8> region_actors;
+						StorageProvider->ArchiveFromString(Value, region_actors);
 
-					RegionsDataObject.Get().SetStringField(FString::Format(TEXT("{0}_{1}_{2}_{3}"), Args), *EncodedData);
+						
+						/////////////////////////////////////////////////////////////
+						TArray<TSharedPtr<FJsonObject>> RegionActorObjects;
+						
+						TArray<FVoxelWorldActorRecord> regionActorRecords;
+						FMemoryReader reader(region_actors, true);
+						reader << regionActorRecords;
+
+						int32 tempActorN = 0;
+						
+						for (auto& record : regionActorRecords) {
+
+							TSharedRef<FJsonObject> CurrentActorObject = MakeShareable(new FJsonObject);
+
+							CurrentActorObject->SetStringField("actor_class",  record.ActorClass);
+							CurrentActorObject->SetStringField("actor_transform",  record.ActorTransform.ToString());
+							CurrentActorObject->SetStringField("actor_PID", FString::FromInt( record.PersistentActorID));
+								
+							FString recordActorData = bUseBase64 ? FBase64::Encode(record.ActorData.GetData(), record.ActorData.Num()) : BytesToHex(record.ActorData.GetData(), record.ActorData.Num());
+							CurrentActorObject->SetStringField("actor_data",  recordActorData);
+
+
+							//TArray<TSharedPtr<FJsonValue>> ActorComponentObjects;
+
+							int32 tempCompN = 0;
+							
+							for (auto& compRecord : record.ActorComponents) {
+								TSharedRef<FJsonObject> CurrentComponentObject = MakeShareable(new FJsonObject);
+								CurrentComponentObject->SetStringField("component_class", compRecord.ComponentClass);
+								CurrentComponentObject->SetStringField("component_transform", compRecord.ComponentTransform.ToString());
+								CurrentComponentObject->SetStringField("component_spawn_if_not_found", FString::FromInt(compRecord.bSpawnIfNotFound));
+
+								FString recordComponentData = bUseBase64 ? FBase64::Encode(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num()) : BytesToHex(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num());
+								CurrentComponentObject->SetStringField("component_data", recordComponentData);
+
+								CurrentActorObject.Get().SetObjectField(FString::FromInt(tempCompN++), CurrentComponentObject);
+							//	ActorComponentObjects.Add(CurrentComponentObject); // todo make this an array?? cant figure out Object->Value
+							}
+
+							//CurrentActorObject.Get().SetArrayField("actor_components", ActorComponentObjects);
+						//	RegionActorObjects.Add(CurrentActorObject);
+						CurrentRegionObject.Get().SetObjectField(FString::FromInt(tempActorN++),CurrentActorObject);
+
+
+						}
+						//CurrentRegionObject.Get().SetArrayField("actors", RegionActorObjects);
+						//
+				TArray<FStringFormatArg> Args;
+				Args.Emplace(Decoded.X);
+				Args.Emplace(Decoded.Y);
+				Args.Emplace(Decoded.Z);
+
+				RegionsDataObject.Get().SetObjectField(FString::Format(TEXT("{0}_{1}_{2}"), Args), CurrentRegionObject);
+						
+						/////////////////////////////////////////////////////////////
+					} else {
+						TArray<FStringFormatArg> Args;
+						Args.Emplace(Decoded.X);
+						Args.Emplace(Decoded.Y);
+						Args.Emplace(Decoded.Z);
+						Args.Emplace(Decoded.W);
+
+						FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
+						RegionsDataObject.Get().SetStringField(FString::Format(TEXT("{0}_{1}_{2}_{3}"), Args), *EncodedData);
+					}
 				}
 			}
 		}
-		else { RootObject.Get().SetStringField(UTF8_TO_TCHAR(Key.c_str()), EncodedData); }
+		else {
+			FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
+			RootObject.Get().SetStringField(UTF8_TO_TCHAR(Key.c_str()), EncodedData);
+		}
 	});
 
 	if(bDumpRegions){
