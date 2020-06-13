@@ -8,6 +8,7 @@
 #include "Serialization/ArchiveSaveCompressedProxy.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/ArchiveLoadCompressedProxy.h"
+#include "VoxelNetThreads.h"
 
 
 StorageProviderFlatfile::StorageProviderFlatfile() {
@@ -31,6 +32,42 @@ bool StorageProviderFlatfile::Open(std::string Database, bool bCreateIfNotFound)
 
 bool StorageProviderFlatfile::Close() {
 	
+	return true;
+}
+
+bool StorageProviderFlatfile::Keys(TArray<FString>& OutKeys) {
+	TArray<FString> tempOut;
+	
+	if(FPaths::DirectoryExists(UTF8_TO_TCHAR(KeyPrefix.c_str()))) {
+		IFileManager::Get().FindFiles(tempOut,UTF8_TO_TCHAR(KeyPrefix.c_str()),UTF8_TO_TCHAR(KeySuffix.c_str()));
+
+		for(auto&elem:tempOut) {
+			OutKeys.Emplace(elem.LeftChop(KeySuffix.length())); // remove file extension
+		}
+		
+		return true;
+	}
+
+	return false;
+}
+
+bool StorageProviderFlatfile::ForEach(TFunction<void(std::string Key, std::string Value)> CalledForEach) {
+	if(!FPaths::DirectoryExists(UTF8_TO_TCHAR(KeyPrefix.c_str()))) return false;
+	
+	TArray<FString> Filenames;
+	Keys(Filenames);
+	
+	for(auto&elem:Filenames) {
+		std::string Data;
+		auto b = this->Get(TCHAR_TO_UTF8(*elem), Data);
+
+		if(b) {
+			CalledForEach(TCHAR_TO_UTF8(*elem), Data);
+		} else {
+			UE_LOG(LogVoxelDatabase, Warning, TEXT("Failed to load the value for key [%s] while during iteration, skipping."), *elem);
+		}
+	}
+
 	return true;
 }
 
@@ -80,3 +117,34 @@ std::string StorageProviderFlatfile::SerializeLocationToString(int32_t X, int32_
 	sprintf_s(buf, "%d_%d_%d_%d", X,Y,Z,W);
 	return std::string(buf);
 }
+
+FIntVector4 StorageProviderFlatfile::DeserializeLocationToString(std::string Key) {
+	FString KeyStr = UTF8_TO_TCHAR(Key.c_str());
+
+	TArray<FString> Parts;
+	KeyStr.ParseIntoArray(Parts, TEXT("_"));
+
+	if(Parts.Num() != 4) {
+		UE_LOG(LogVoxelDatabase, Warning, TEXT("Failed to deserialize the key [%s] into a location!"))
+		return FIntVector4();
+	}
+	
+	FIntVector4 out;
+
+	out.X = FCString::Atoi(*Parts[0]);
+	out.Y = FCString::Atoi(*Parts[1]);
+	out.Z = FCString::Atoi(*Parts[2]);
+	out.W = FCString::Atoi(*Parts[3]);
+
+	return out;
+}
+
+bool StorageProviderFlatfile::IsRegionKey(std::string Key) {
+	FString KeyStr = UTF8_TO_TCHAR(Key.c_str());
+
+	TArray<FString> Parts;
+	KeyStr.ParseIntoArray(Parts, TEXT("_"));
+
+	return Parts.Num() == 4 && Parts[0].IsNumeric() && Parts[1].IsNumeric() && Parts[2].IsNumeric() && Parts[3].IsNumeric();
+}
+

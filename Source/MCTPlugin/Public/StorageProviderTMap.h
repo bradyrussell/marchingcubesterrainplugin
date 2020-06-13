@@ -24,6 +24,10 @@ public:
 	/* StorageProvider Interface */
 	virtual bool Open(std::string Database, bool bCreateIfNotFound) override;
 	virtual bool Close() override;
+
+
+	bool Keys(TArray<FString>& OutKeys) override;
+	bool ForEach(TFunction<void(std::string Key, std::string Value)> CalledForEach) override;
 	
 	virtual bool Put(std::string Key, std::string Value)  override;
 	virtual bool Get(std::string Key, std::string& Value) override;

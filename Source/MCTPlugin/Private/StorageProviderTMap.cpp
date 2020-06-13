@@ -49,6 +49,18 @@ bool StorageProviderTMap::Close() {
 	return true;
 }
 
+bool StorageProviderTMap::Keys(TArray<FString>& OutKeys) {
+	DatabaseMap.GetKeys(OutKeys);
+	return true;
+}
+
+bool StorageProviderTMap::ForEach(TFunction<void(std::string Key, std::string Value)> CalledForEach) {
+	for (TTuple<FString, TArray<uint8>> elem : DatabaseMap) {
+		CalledForEach(TCHAR_TO_UTF8(*elem.Key), ArchiveToString(elem.Value));
+	}
+	return true;
+}
+
 bool StorageProviderTMap::Put(std::string Key, std::string Value) {
 	TArray<uint8> buf;
 	ArchiveFromString(Value, buf);
