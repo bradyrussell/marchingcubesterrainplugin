@@ -72,11 +72,24 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	FString WorldFormat = CmdLineParams.Find("format")->ToLower();
 	FString OutLocation; // todo implement
 	bool bUseBase64 = true;
+	bool bTerrainUseBase64 = true;
+	bool bDumpRegions = true;
+	bool bDumpTerrain = true;
 
 	if (CmdLineSwitches.Contains("base64"))
 		bUseBase64 = true;
 	if (CmdLineSwitches.Contains("hex"))
 		bUseBase64 = false;
+
+	if (CmdLineSwitches.Contains("noregions"))
+		bDumpRegions = false;
+	if (CmdLineSwitches.Contains("noterrain"))
+		bDumpTerrain = false;
+
+	if (CmdLineSwitches.Contains("base64terrain"))
+		bTerrainUseBase64 = true;
+	if (CmdLineSwitches.Contains("hexterrain"))
+		bTerrainUseBase64 = false;
 
 	if (CmdLineParams.Contains("out")) { OutLocation = *CmdLineParams.Find("out"); }
 	else { OutLocation = WorldLocation; }
@@ -127,24 +140,22 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	TSharedRef<FJsonObject> RegionsObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsDataObject = MakeShareable(new FJsonObject);
 	
-	StorageProvider->ForEach([this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64](std::string Key, std::string Value) {
-		//UE_LOG(LogExportWorldCommandlet, Display, TEXT("[%s] : [%s]"), UTF8_TO_TCHAR(Key.c_str()), *);
-		//UE_LOG(LogExportWorldCommandlet, Display, TEXT("[%s] : [%s]"), UTF8_TO_TCHAR(Key.c_str()), *FBase64::Encode((uint8*)Value.data(), Value.length()));
+	StorageProvider->ForEach([this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain](std::string Key, std::string Value) {
+		FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length());
 
-		FString EncodedData;
-
-		if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
-		else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }
+		/*if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
+		else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }*/
 
 		if (StorageProvider->IsRegionKey(Key)) {
+			if(!bDumpRegions) return;
 			auto Decoded = StorageProvider->DeserializeLocationToString(Key);
 
-			if (Decoded.W == 0) {
+			if (Decoded.W == 0 && bDumpTerrain) {
 				// this is a unique occurrence per region
 				TArray<uint8> RegionBinary;
 				StorageProvider->GetRegionBinary(FIntVector(Decoded.X, Decoded.Y, Decoded.Z), RegionBinary);
 
-				FString EncodedRegionData = FBase64::Encode(RegionBinary.GetData(), RegionBinary.Num());
+				FString EncodedRegionData = bTerrainUseBase64 ? FBase64::Encode(RegionBinary.GetData(), RegionBinary.Num()) : BytesToHex(RegionBinary.GetData(), RegionBinary.Num());
 
 				TArray<FStringFormatArg> Args;
 				Args.Emplace(Decoded.X);
@@ -168,15 +179,24 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 		else { RootObject.Get().SetStringField(UTF8_TO_TCHAR(Key.c_str()), EncodedData); }
 	});
 
-	RootObject.Get().SetObjectField("regions_terrain", RegionsObject);
-	RootObject.Get().SetObjectField("regions_data", RegionsDataObject);
+	if(bDumpRegions){
+		RootObject.Get().SetObjectField("regions_data", RegionsDataObject);
+		if(bDumpTerrain){
+			RootObject.Get().SetObjectField("regions_terrain", RegionsObject);
+		}
+	}
 
 	FString OutputString;
 	TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&OutputString);
 
 	FJsonSerializer::Serialize(RootObject, Writer);
 
-	FString OutPath = FPaths::ProjectSavedDir().Append("/").Append(WorldLocation).Append(".json");
+	TArray<FStringFormatArg> Args;
+	Args.Emplace(FPaths::ProjectSavedDir());
+	Args.Emplace(WorldLocation);
+	Args.Emplace(FDateTime::Now().ToUnixTimestamp());
+
+	FString OutPath = FString::Format(TEXT("{0}/{1}_export_{2}.json"),Args);
 
 	FFileHelper::SaveStringToFile(OutputString, *OutPath);
 
