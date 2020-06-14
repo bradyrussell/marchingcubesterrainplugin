@@ -136,117 +136,113 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	TSharedRef<FJsonObject> RootObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsDataObject = MakeShareable(new FJsonObject);
-	
-	StorageProvider->ForEach([this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain, bDecodeRegionalData](std::string Key, std::string Value) {
 
-		/*if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
-		else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }*/
+	StorageProvider->ForEach(
+		[this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain, bDecodeRegionalData](std::string Key, std::string Value) {
+			/*if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
+				   else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }*/
 
-		if (StorageProvider->IsRegionKey(Key)) {
-			if(!bDumpRegions) return;
-			auto Decoded = StorageProvider->DeserializeLocationToString(Key);
+			if (StorageProvider->IsRegionKey(Key)) {
+				if (!bDumpRegions)
+					return;
+				auto Decoded = StorageProvider->DeserializeLocationToString(Key);
 
-			if (Decoded.W == 0 && bDumpTerrain) {
-				// this is a unique occurrence per region
-				TArray<uint8> RegionBinary;
-				StorageProvider->GetRegionBinary(FIntVector(Decoded.X, Decoded.Y, Decoded.Z), RegionBinary);
+				if (Decoded.W == 0 && bDumpTerrain) {
+					// this is a unique occurrence per region
+					TArray<uint8> RegionBinary;
+					StorageProvider->GetRegionBinary(FIntVector(Decoded.X, Decoded.Y, Decoded.Z), RegionBinary);
 
-				FString EncodedRegionData = bTerrainUseBase64 ? FBase64::Encode(RegionBinary.GetData(), RegionBinary.Num()) : BytesToHex(RegionBinary.GetData(), RegionBinary.Num());
+					FString EncodedRegionData = bTerrainUseBase64 ? FBase64::Encode(RegionBinary.GetData(), RegionBinary.Num()) : BytesToHex(RegionBinary.GetData(), RegionBinary.Num());
 
-				TArray<FStringFormatArg> Args;
-				Args.Emplace(Decoded.X);
-				Args.Emplace(Decoded.Y);
-				Args.Emplace(Decoded.Z);
+					TArray<FStringFormatArg> Args;
+					Args.Emplace(Decoded.X);
+					Args.Emplace(Decoded.Y);
+					Args.Emplace(Decoded.Z);
 
-				RegionsObject.Get().SetStringField(FString::Format(TEXT("{0}_{1}_{2}"), Args), *EncodedRegionData);
-			}
-			else {
-				if (Decoded.W >= REGION_SIZE) {
-					if(bDecodeRegionalData) {
-						TSharedRef<FJsonObject> CurrentRegionObject = MakeShareable(new FJsonObject);
-						
-						TArray<uint8> region_actors;
-						StorageProvider->ArchiveFromString(Value, region_actors);
+					RegionsObject.Get().SetStringField(FString::Format(TEXT("{0}_{1}_{2}"), Args), *EncodedRegionData);
+				}
+				else {
+					if (Decoded.W >= REGION_SIZE) {
+						if (bDecodeRegionalData) {
+							TSharedRef<FJsonObject> CurrentRegionObject = MakeShareable(new FJsonObject);
 
-						
-						/////////////////////////////////////////////////////////////
-						TArray<TSharedPtr<FJsonObject>> RegionActorObjects;
-						
-						TArray<FVoxelWorldActorRecord> regionActorRecords;
-						FMemoryReader reader(region_actors, true);
-						reader << regionActorRecords;
-
-						int32 tempActorN = 0;
-						
-						for (auto& record : regionActorRecords) {
-
-							TSharedRef<FJsonObject> CurrentActorObject = MakeShareable(new FJsonObject);
-
-							CurrentActorObject->SetStringField("actor_class",  record.ActorClass);
-							CurrentActorObject->SetStringField("actor_transform",  record.ActorTransform.ToString());
-							CurrentActorObject->SetStringField("actor_PID", FString::FromInt( record.PersistentActorID));
-								
-							FString recordActorData = bUseBase64 ? FBase64::Encode(record.ActorData.GetData(), record.ActorData.Num()) : BytesToHex(record.ActorData.GetData(), record.ActorData.Num());
-							CurrentActorObject->SetStringField("actor_data",  recordActorData);
+							TArray<uint8> region_actors;
+							StorageProvider->ArchiveFromString(Value, region_actors);
 
 
-							//TArray<TSharedPtr<FJsonValue>> ActorComponentObjects;
+							/////////////////////////////////////////////////////////////
+							TArray<TSharedPtr<FJsonValue>> RegionActorObjects;
 
-							int32 tempCompN = 0;
-							
-							for (auto& compRecord : record.ActorComponents) {
-								TSharedRef<FJsonObject> CurrentComponentObject = MakeShareable(new FJsonObject);
-								CurrentComponentObject->SetStringField("component_class", compRecord.ComponentClass);
-								CurrentComponentObject->SetStringField("component_transform", compRecord.ComponentTransform.ToString());
-								CurrentComponentObject->SetStringField("component_spawn_if_not_found", FString::FromInt(compRecord.bSpawnIfNotFound));
+							TArray<FVoxelWorldActorRecord> regionActorRecords;
+							FMemoryReader reader(region_actors, true);
+							reader << regionActorRecords;
 
-								FString recordComponentData = bUseBase64 ? FBase64::Encode(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num()) : BytesToHex(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num());
-								CurrentComponentObject->SetStringField("component_data", recordComponentData);
+							for (auto& record : regionActorRecords) {
+								TSharedRef<FJsonObject> CurrentActorObject = MakeShareable(new FJsonObject);
 
-								CurrentActorObject.Get().SetObjectField(FString::FromInt(tempCompN++), CurrentComponentObject);
-							//	ActorComponentObjects.Add(CurrentComponentObject); // todo make this an array?? cant figure out Object->Value
+								CurrentActorObject->SetStringField("actor_class", record.ActorClass);
+								CurrentActorObject->SetStringField("actor_transform", record.ActorTransform.ToString());
+								CurrentActorObject->SetStringField("actor_PID", FString::FromInt(record.PersistentActorID));
+
+								FString recordActorData = bUseBase64
+									                          ? FBase64::Encode(record.ActorData.GetData(), record.ActorData.Num())
+									                          : BytesToHex(record.ActorData.GetData(), record.ActorData.Num());
+								CurrentActorObject->SetStringField("actor_data", recordActorData);
+
+
+								TArray<TSharedPtr<FJsonValue>> ActorComponentObjects;
+
+								for (auto& compRecord : record.ActorComponents) {
+									TSharedRef<FJsonObject> CurrentComponentObject = MakeShareable(new FJsonObject);
+									CurrentComponentObject->SetStringField("component_class", compRecord.ComponentClass);
+									CurrentComponentObject->SetStringField("component_transform", compRecord.ComponentTransform.ToString());
+									CurrentComponentObject->SetStringField("component_spawn_if_not_found", FString::FromInt(compRecord.bSpawnIfNotFound));
+
+									FString recordComponentData = bUseBase64
+										                              ? FBase64::Encode(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num())
+										                              : BytesToHex(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num());
+									CurrentComponentObject->SetStringField("component_data", recordComponentData);
+
+									ActorComponentObjects.Add(MakeShareable(new FJsonValueObject(CurrentComponentObject))); // todo make this an array?? cant figure out Object->Value
+								}
+
+								CurrentActorObject.Get().SetArrayField("actor_components", ActorComponentObjects);
+
+								RegionActorObjects.Add(MakeShareable(new FJsonValueObject(CurrentActorObject)));
 							}
+							CurrentRegionObject.Get().SetArrayField("actors", RegionActorObjects);
 
-							//CurrentActorObject.Get().SetArrayField("actor_components", ActorComponentObjects);
-						//	RegionActorObjects.Add(CurrentActorObject);
-						CurrentRegionObject.Get().SetObjectField(FString::FromInt(tempActorN++),CurrentActorObject);
+							TArray<FStringFormatArg> Args;
+							Args.Emplace(Decoded.X);
+							Args.Emplace(Decoded.Y);
+							Args.Emplace(Decoded.Z);
 
+							RegionsDataObject.Get().SetObjectField(FString::Format(TEXT("{0}_{1}_{2}"), Args), CurrentRegionObject);
 
+							/////////////////////////////////////////////////////////////
 						}
-						//CurrentRegionObject.Get().SetArrayField("actors", RegionActorObjects);
-						//
-				TArray<FStringFormatArg> Args;
-				Args.Emplace(Decoded.X);
-				Args.Emplace(Decoded.Y);
-				Args.Emplace(Decoded.Z);
+						else {
+							TArray<FStringFormatArg> Args;
+							Args.Emplace(Decoded.X);
+							Args.Emplace(Decoded.Y);
+							Args.Emplace(Decoded.Z);
+							Args.Emplace(Decoded.W);
 
-				RegionsDataObject.Get().SetObjectField(FString::Format(TEXT("{0}_{1}_{2}"), Args), CurrentRegionObject);
-						
-						/////////////////////////////////////////////////////////////
-					} else {
-						TArray<FStringFormatArg> Args;
-						Args.Emplace(Decoded.X);
-						Args.Emplace(Decoded.Y);
-						Args.Emplace(Decoded.Z);
-						Args.Emplace(Decoded.W);
-
-						FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
-						RegionsDataObject.Get().SetStringField(FString::Format(TEXT("{0}_{1}_{2}_{3}"), Args), *EncodedData);
+							FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
+							RegionsDataObject.Get().SetStringField(FString::Format(TEXT("{0}_{1}_{2}_{3}"), Args), *EncodedData);
+						}
 					}
 				}
 			}
-		}
-		else {
-			FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
-			RootObject.Get().SetStringField(UTF8_TO_TCHAR(Key.c_str()), EncodedData);
-		}
-	});
+			else {
+				FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
+				RootObject.Get().SetStringField(UTF8_TO_TCHAR(Key.c_str()), EncodedData);
+			}
+		});
 
-	if(bDumpRegions){
+	if (bDumpRegions) {
 		RootObject.Get().SetObjectField("regions_data", RegionsDataObject);
-		if(bDumpTerrain){
-			RootObject.Get().SetObjectField("regions_terrain", RegionsObject);
-		}
+		if (bDumpTerrain) { RootObject.Get().SetObjectField("regions_terrain", RegionsObject); }
 	}
 
 	FString OutputString;
@@ -259,7 +255,7 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	Args.Emplace(WorldLocation);
 	Args.Emplace(FDateTime::Now().ToUnixTimestamp());
 
-	FString OutPath = FString::Format(TEXT("{0}/{1}_export_{2}.json"),Args);
+	FString OutPath = FString::Format(TEXT("{0}/{1}_export_{2}.json"), Args);
 
 	FFileHelper::SaveStringToFile(OutputString, *OutPath);
 
