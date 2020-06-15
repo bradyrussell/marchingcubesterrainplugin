@@ -35,6 +35,10 @@ public:
 	virtual const char* GetProviderName() override;
 	virtual std::string GetDatabasePath(std::string Name) override;
 	std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) override;
+
+	
 	/* End StorageProvider Interface */
 
+	FIntVector4 DeserializeLocationFromString(std::string Key) override;
+	bool IsRegionKey(std::string Key) override;
 };

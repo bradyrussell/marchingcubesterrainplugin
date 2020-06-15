@@ -32,6 +32,6 @@ public:
 	/* End StorageProvider Interface */
 
 	virtual std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) override;
-	FIntVector4 DeserializeLocationToString(std::string Key) override;
+	FIntVector4 DeserializeLocationFromString(std::string Key) override;
 	bool IsRegionKey(std::string Key) override;
 };

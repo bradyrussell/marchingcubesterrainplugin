@@ -46,7 +46,7 @@ public:
 	// Optionally allowed to override because some StorageProviders have character restrictions e.g. flatfile
 	// if you override this you must also override Deserialize...() and IsRegionKey()
 	virtual std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W);
-	virtual FIntVector4 DeserializeLocationToString(std::string Key);
+	virtual FIntVector4 DeserializeLocationFromString(std::string Key);
 	// returns true if the key matches SerializeLocationToString
 	virtual bool IsRegionKey(std::string Key);
 	

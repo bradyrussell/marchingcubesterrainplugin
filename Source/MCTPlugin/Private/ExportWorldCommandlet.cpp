@@ -136,16 +136,17 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 	TSharedRef<FJsonObject> RootObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsDataObject = MakeShareable(new FJsonObject);
+	TSharedRef<FJsonObject> PlayersDataObject = MakeShareable(new FJsonObject);
 
 	StorageProvider->ForEach(
-		[this, &RootObject, &RegionsObject, &RegionsDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain, bDecodeRegionalData](std::string Key, std::string Value) {
+		[this, &RootObject, &RegionsObject, &RegionsDataObject, &PlayersDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain, bDecodeRegionalData](std::string Key, std::string Value) {
 			/*if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
 				   else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }*/
 
-			if (StorageProvider->IsRegionKey(Key)) {
+			if (StorageProvider->IsRegionKey(Key)) { // regional terrain and data
 				if (!bDumpRegions)
 					return;
-				auto Decoded = StorageProvider->DeserializeLocationToString(Key);
+				auto Decoded = StorageProvider->DeserializeLocationFromString(Key);
 
 				if (Decoded.W == 0 && bDumpTerrain) {
 					// this is a unique occurrence per region
@@ -203,7 +204,7 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 										                              : BytesToHex(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num());
 									CurrentComponentObject->SetStringField("component_data", recordComponentData);
 
-									ActorComponentObjects.Add(MakeShareable(new FJsonValueObject(CurrentComponentObject))); // todo make this an array?? cant figure out Object->Value
+									ActorComponentObjects.Add(MakeShareable(new FJsonValueObject(CurrentComponentObject))); 
 								}
 
 								CurrentActorObject.Get().SetArrayField("actor_components", ActorComponentObjects);
@@ -234,12 +235,63 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 					}
 				}
 			}
-			else {
-				FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); // todo
-				RootObject.Get().SetStringField(UTF8_TO_TCHAR(Key.c_str()), EncodedData);
+			else { // global data
+				FString KeyFstr = UTF8_TO_TCHAR(Key.c_str());
+
+				if(KeyFstr.StartsWith("MapGlobalData_PLAYER_")) {// todo replace with tag system?
+					
+					/////////////////////////////////////////////////////////////////////////////////////////////////
+					TArray<uint8> playerSave;
+
+					if (StorageProvider->GetGlobalData(Key.substr(14), playerSave)) {
+
+						TSharedRef<FJsonObject> CurrentPlayerObject = MakeShareable(new FJsonObject);
+					
+						FVoxelWorldPlayerActorRecord record;
+						FMemoryReader reader(playerSave, true);
+						reader << record;
+
+						CurrentPlayerObject->SetStringField("actor_class", record.ActorClass);
+						CurrentPlayerObject->SetStringField("actor_transform", record.ActorTransform.ToString());
+						CurrentPlayerObject->SetStringField("actor_saved_at", record.SavedAt.ToIso8601());
+
+						FString recordActorData = bUseBase64
+							                          ? FBase64::Encode(record.ActorData.GetData(), record.ActorData.Num())
+							                          : BytesToHex(record.ActorData.GetData(), record.ActorData.Num());
+						CurrentPlayerObject->SetStringField("actor_data", recordActorData);
+
+						TArray<TSharedPtr<FJsonValue>> ActorComponentObjects;
+						
+						for (auto& compRecord : record.ActorComponents) {
+								TSharedRef<FJsonObject> CurrentComponentObject = MakeShareable(new FJsonObject);
+								CurrentComponentObject->SetStringField("component_class", compRecord.ComponentClass);
+								CurrentComponentObject->SetStringField("component_transform", compRecord.ComponentTransform.ToString());
+								CurrentComponentObject->SetStringField("component_spawn_if_not_found", FString::FromInt(compRecord.bSpawnIfNotFound));
+
+								FString recordComponentData = bUseBase64
+									                              ? FBase64::Encode(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num())
+									                              : BytesToHex(compRecord.ComponentData.GetData(), compRecord.ComponentData.Num());
+								CurrentComponentObject->SetStringField("component_data", recordComponentData);
+
+								ActorComponentObjects.Add(MakeShareable(new FJsonValueObject(CurrentComponentObject))); 
+						}
+
+						CurrentPlayerObject->SetArrayField("components", ActorComponentObjects);
+						PlayersDataObject->SetObjectField(KeyFstr.RightChop(21), CurrentPlayerObject);
+					}
+					
+					
+					/////////////////////////////////////////////////////////////////////////////////////////////////
+					return;
+				}
+
+				//default to dumping Key:encode(data)
+				FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); 
+				RootObject.Get().SetStringField(KeyFstr, EncodedData);
 			}
 		});
 
+	RootObject.Get().SetObjectField("players", PlayersDataObject);
 	if (bDumpRegions) {
 		RootObject.Get().SetObjectField("regions_data", RegionsDataObject);
 		if (bDumpTerrain) { RootObject.Get().SetObjectField("regions_terrain", RegionsObject); }

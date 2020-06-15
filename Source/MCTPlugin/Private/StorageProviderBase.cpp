@@ -349,7 +349,7 @@ std::string StorageProviderBase::SerializeLocationToString(int32_t X, int32_t Y,
 	return r;
 }
 
-FIntVector4 StorageProviderBase::DeserializeLocationToString(std::string Key) {
+FIntVector4 StorageProviderBase::DeserializeLocationFromString(std::string Key) {
 	TArray<uint8> data;
 	ArchiveFromString(Key,data);
 

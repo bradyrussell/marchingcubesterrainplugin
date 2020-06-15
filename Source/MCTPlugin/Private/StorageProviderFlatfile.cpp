@@ -118,7 +118,7 @@ std::string StorageProviderFlatfile::SerializeLocationToString(int32_t X, int32_
 	return std::string(buf);
 }
 
-FIntVector4 StorageProviderFlatfile::DeserializeLocationToString(std::string Key) {
+FIntVector4 StorageProviderFlatfile::DeserializeLocationFromString(std::string Key) {
 	FString KeyStr = UTF8_TO_TCHAR(Key.c_str());
 
 	TArray<FString> Parts;
