@@ -233,3 +233,16 @@ public:
 	APagedWorld* world;
 };
 
+class UEPolyvoxLogger : public  PolyVox::Logger
+{
+public:
+       UEPolyvoxLogger() : Logger() {}
+       virtual ~UEPolyvoxLogger() {}
+
+       void logTraceMessage(const std::string& message) { UE_LOG(LogVoxelWorld, Verbose, TEXT("[PolyVox] %hs"), message.c_str()); }
+       void logDebugMessage(const std::string& message) { UE_LOG(LogVoxelWorld, Verbose, TEXT("[PolyVox] %hs"), message.c_str()); }
+       void logInfoMessage(const std::string& message) { UE_LOG(LogVoxelWorld, Display, TEXT("[PolyVox] %hs"), message.c_str()); }
+       void logWarningMessage(const std::string& message) { UE_LOG(LogVoxelWorld, Warning, TEXT("[PolyVox] %hs"), message.c_str()); }
+       void logErrorMessage(const std::string& message) { UE_LOG(LogVoxelWorld, Error, TEXT("[PolyVox] %hs"), message.c_str()); }
+       void logFatalMessage(const std::string& message) { UE_LOG(LogVoxelWorld, Fatal, TEXT("[PolyVox] %hs"), message.c_str()); }
+};

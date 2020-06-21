@@ -319,9 +319,9 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		bHasStarted = true;
 		//WorldStorageProvider = new StorageProviderLevelDB(true);
-		WorldStorageProvider = new StorageProviderFlatfile();
+		//WorldStorageProvider = new StorageProviderFlatfile();
 		//WorldStorageProvider = new StorageProviderTMap(true);
-		//WorldStorageProvider = new StorageProviderNull();
+		WorldStorageProvider = new StorageProviderNull();
 
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
@@ -361,6 +361,10 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 
 void APagedWorld::PostInitializeComponents() {
 	Super::PostInitializeComponents();
+	
+	UEPolyvoxLogger* myCustomLogger = new UEPolyvoxLogger();
+	PolyVox::setLoggerInstance(myCustomLogger);
+	
 	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), VolumeTargetMemoryMB * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this)));
