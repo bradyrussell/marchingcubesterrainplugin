@@ -21,4 +21,4 @@
 // #define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
 // #define REGIONAL_DATA_RESOURCES 3 // store dropped items
 //
-// #define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
+// #define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for REGION_SIZE of 32

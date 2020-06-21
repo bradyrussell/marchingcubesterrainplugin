@@ -918,6 +918,8 @@ void APagedWorld::SavePlayerActor(FString Identifier, AActor* ActorToSerialize) 
 
 		UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Saved player actor %s."), *Identifier);
 		UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] data: %s."), *BytesToHex(playerSave.GetData(),playerSave.Num()));
+
+		playerSave.Close();
 		/////////////////////////////////////////////////////////
 	}
 }

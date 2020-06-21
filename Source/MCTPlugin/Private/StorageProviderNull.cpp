@@ -18,6 +18,15 @@ bool StorageProviderNull::Close() {
 	return true;
 }
 
+bool StorageProviderNull::Keys(TArray<FString>& OutKeys) {
+	return true;
+}
+
+bool StorageProviderNull::ForEach(TFunction<void(std::string Key, std::string Value)> CalledForEach) {
+	return true;
+}
+
+
 bool StorageProviderNull::Put(std::string Key, std::string Value) {
 	return true;
 }

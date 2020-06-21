@@ -32,19 +32,33 @@ public:
 	virtual bool Put(std::string Key, std::string Value) = 0;
 	virtual bool Get(std::string Key, std::string& Value) = 0;
 
+	// return all keys in the database
+	virtual bool Keys(TArray<FString>& OutKeys) = 0;
+
+	// call a function for each key,value pair in the database
+	// this is a read only operation 
+	virtual bool ForEach(TFunction<void (std::string Key, std::string Value)> CalledForEach) = 0;
+	
 	virtual std::string GetDatabasePath(std::string Name) = 0;
 	virtual const char* GetProviderName() = 0;
 	/* End StorageProvider Interface */
 
 	// Optionally allowed to override because some StorageProviders have character restrictions e.g. flatfile
+	// if you override this you must also override Deserialize...() and IsRegionKey()
 	virtual std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W);
-
+	virtual FIntVector4 DeserializeLocationFromString(std::string Key);
+	// returns true if the key matches SerializeLocationToString
+	virtual bool IsRegionKey(std::string Key);
+	
 	bool PutBytes(std::string Key, TArray<uint8>& Bytes);
 	bool GetBytes(std::string Key, TArray<uint8>& Bytes);
 
 	bool PutRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData);
 	bool GetRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData);
 
+	bool PutRegionBinary(FIntVector Region, TArray<uint8>& Bytes);
+	bool GetRegionBinary(FIntVector Region, TArray<uint8>& Bytes);
+	
 	bool PutRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes);
 	bool GetRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes);
 
