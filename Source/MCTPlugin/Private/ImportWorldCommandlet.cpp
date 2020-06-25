@@ -33,22 +33,6 @@ UImportWorldCommandlet::UImportWorldCommandlet(const FObjectInitializer& ObjectI
 }
 
 
-// json structure
-
-// each region is a json file
-// region {
-
-//	}
-//	entities: {
-//		[
-//		{ transform:"1 2 3|4 5 6|1 1 1", name: "SavedEntity_04", data: "aa658b678o967aw485ga4b..."} // todo maybe theres a way to scan the class for what savegame properties it has, so we can parse data
-//		]
-//	}
-// }
-//
-// // all other keys into one json file?
-// or individual??
-
 
 int32 UImportWorldCommandlet::Main(const FString& Params) {
 	const TCHAR* ParamStr = *Params;
@@ -114,19 +98,18 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 
 	UE_LOG(LogImportWorldCommandlet, Display, TEXT("Connecting to world database [%s]..."), *WorldLocation);
 
-	bool bSuccess = StorageProvider->Open(TCHAR_TO_UTF8(*WorldLocation), false);
+	bool bSuccess = StorageProvider->Open(TCHAR_TO_UTF8(*WorldLocation), true);
 
 	UE_LOG(LogImportWorldCommandlet, Display, TEXT("Database connection to %hs using provider %hs: %s"), StorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*WorldLocation)).c_str(),
 	       StorageProvider->GetProviderName(), bSuccess ? TEXT("Success") : TEXT("Failure"));
 
 	if (!bSuccess) {
-		UE_LOG(LogImportWorldCommandlet, Error, TEXT("Failed to connect to database %hs using provider %hs. Please ensure that the name and format are correct."),
+		UE_LOG(LogImportWorldCommandlet, Error, TEXT("Failed to connect to database %hs using provider %hs. Please ensure that this location is able to be written to."),
 		       StorageProvider->GetDatabasePath(TCHAR_TO_UTF8(*WorldLocation)).c_str(),
 		       StorageProvider->GetProviderName());
 		return 4;
 	}
 
-	
 
 	UE_LOG(LogImportWorldCommandlet, Display, TEXT("Converting %s JSON to database..."), bUseBase64 ? TEXT("Base64"):TEXT("Hex"));
 
@@ -141,18 +124,142 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InputJSON);
 
-	if (FJsonSerializer::Deserialize(Reader, RootObject)) {
-
+	if (!FJsonSerializer::Deserialize(Reader, RootObject)) {
+		UE_LOG(LogImportWorldCommandlet, Error, TEXT("Failed to parse the contents of the specified file. Please ensure that the file is valid JSON."));
+		return 8;
 	}
+
+	//if(RootObject->HasTypedField<FJsonObject>()) // todo use
+	
+	auto RegionsObject = RootObject->GetObjectField("regions_terrain");
+	auto RegionsDataObject = RootObject->GetObjectField("regions_data");
+	auto PlayersDataObject = RootObject->GetObjectField("players");
 	
 	/*TSharedRef<FJsonObject> RegionsObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> RegionsDataObject = MakeShareable(new FJsonObject);
 	TSharedRef<FJsonObject> PlayersDataObject = MakeShareable(new FJsonObject);*/
 
-	StorageProvider->ForEach(
+	// -- //
+
+	//RootObject->RemoveField() after dealing with each field
+
+	// do terrain
+
+	int32 NumberRegionsImported = 0;
+	
+	for (auto Value : RegionsObject->Values) {
+		TArray<FString> Coords;
+		Value.Key.ParseIntoArray(Coords, TEXT("_"));
+
+		if(Coords.Num() != 3) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the region key [%s] expected format [X_Y_Z]. Skipping."), *Value.Key);
+			continue;
+		}
+
+		FString value;
+		if(!Value.Value->TryGetString(value)) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the region value associated with the key [%s] expected a string. Skipping."), *Value.Key);
+			continue;
+		}
+
+		TArray<uint8> decodedBase64;
+		if(!FBase64::Decode(value, decodedBase64)) { // todo allow hex
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to decode the region value associated with the key [%s] expected Base64. Skipping."), *Value.Key);
+			continue;
+		}
+
+		if(!StorageProvider->PutRegionBinary(FIntVector(FCString::Atoi(*Coords[0]),FCString::Atoi(*Coords[1]),FCString::Atoi(*Coords[2])), decodedBase64)) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to save the region [%s] to the new database. Skipping."), *Value.Key);
+			continue;
+		}
+		NumberRegionsImported++;
+	}
+
+	// do regional data
+
+	int32 NumberRegionsDataImported = 0;
+	
+	for (auto Value : RegionsObject->Values) {
+		TArray<FString> Coords;
+		Value.Key.ParseIntoArray(Coords, TEXT("_"));
+
+		if(Coords.Num() != 3) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the region key [%s] expected format [X_Y_Z]. Skipping."), *Value.Key);
+			continue;
+		}
+
+
+		const TSharedPtr<FJsonObject>* regionalDataObject;
+		
+		if(!Value.Value->TryGetObject(regionalDataObject)) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the region data associated with the key [%s] expected an object. Skipping."), *Value.Key);
+			continue;
+		}
+
+		const TArray<TSharedPtr<FJsonValue>>* RegionalDataActors;
+		if(!regionalDataObject->Get()->TryGetArrayField("actors", RegionalDataActors)) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the region's actor data associated with the key [%s] expected an array. Skipping."), *Value.Key);
+			continue;
+		}
+
+		for(auto& ActorData:*RegionalDataActors) {
+			const TSharedPtr<FJsonObject>* ActorDataObject;
+			if(!ActorData->TryGetObject(ActorDataObject)) {
+				UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse an actor in the region's actor data associated with the key [%s] expected an object. Skipping."), *Value.Key);
+				continue;
+			}
+
+			/*
+			 *
+			 *{
+					"actor_class": "/Game/BPs/Entity/Nodes/BP_StoneNode.BP_StoneNode_C",
+					"actor_transform": "1200.000000,1700.000000,0.000000|-9.429745,-107.329475,-9.429790|0.954106,0.954106,0.954106",
+					"actor_PID": "0",
+					"actor_data": "DgAAAGJDYW5CZURhbWFnZWQADQAAAEJvb2xQcm9wZXJ0eQAAAAAAAAAAAAEABQAAAE5vbmUAAAAAAA==",
+					"actor_components": []
+				}
+			 * 
+			 */
+
+			bool success = true;
+			FVoxelWorldActorRecord newRecord;
+
+			success &= ActorDataObject->Get()->TryGetStringField("actor_class", newRecord.ActorClass);
+
+			FString transformString;
+			success &= ActorDataObject->Get()->TryGetStringField("actor_transform", transformString);
+			newRecord.ActorTransform.InitFromString(transformString);
+
+			FString actorPIDString;
+			success &= ActorDataObject->Get()->TryGetStringField("actor_pid", actorPIDString);
+			newRecord.PersistentActorID = FCString::Atoi64(*actorPIDString);
+
+			FString actorDataString;
+			success &= ActorDataObject->Get()->TryGetStringField("actor_data", actorDataString);
+			success &= FBase64::Decode(actorDataString, newRecord.ActorData);
+		}
+
+		TArray<uint8> decodedBase64;
+		if(!FBase64::Decode(value, decodedBase64)) { // todo allow hex
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to decode the region value associated with the key [%s] expected Base64. Skipping."), *Value.Key);
+			continue;
+		}
+
+		if(!StorageProvider->PutRegionBinary(FIntVector(FCString::Atoi(*Coords[0]),FCString::Atoi(*Coords[1]),FCString::Atoi(*Coords[2])), decodedBase64)) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to save the region [%s] to the new database. Skipping."), *Value.Key);
+			continue;
+		}
+		NumberRegionsImported++;
+	}
+	
+	// do players
+
+	//do global data (remaining)
+	
+	/*StorageProvider->ForEach(
 		[this, &RootObject, &RegionsObject, &RegionsDataObject, &PlayersDataObject, bUseBase64, bTerrainUseBase64, bDumpRegions, bDumpTerrain, bDecodeRegionalData](std::string Key, std::string Value) {
 			/*if (bUseBase64) { EncodedData = FBase64::Encode((uint8*)Value.data(), Value.length()); }
-				   else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }*/
+				   else { EncodedData = BytesToHex((uint8*)Value.data(), Value.length()); }#1#
 
 			if (StorageProvider->IsRegionKey(Key)) { // regional terrain and data
 				if (!bDumpRegions)
@@ -335,7 +442,7 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 				FString EncodedData = bUseBase64 ? FBase64::Encode((uint8*)Value.data(), Value.length()) : BytesToHex((uint8*)Value.data(), Value.length()); 
 				RootObject.Get().SetStringField(KeyFstr, EncodedData);
 			}
-		});
+		});*/
 
 	RootObject.Get().SetObjectField("players", PlayersDataObject);
 	if (bDumpRegions) {
