@@ -10,6 +10,9 @@ This means you can create procedural worlds from a numeric seed which expand "in
 
 Works with UE4 navmesh generation, check out NavInvokers for best performance.
 
+# Example
+[![](http://img.youtube.com/vi/GseUuAAKobw/0.jpg)](http://www.youtube.com/watch?v=GseUuAAKobw "Marching Cubes Terrain Plugin")
+
 # Usage
 ## Download the plugin and dependencies to your Plugins folder
 This plugin as well as:
