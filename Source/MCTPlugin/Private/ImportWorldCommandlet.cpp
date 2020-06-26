@@ -15,6 +15,8 @@
 #include "Containers/UnrealString.h"
 #include "Serialization/MemoryReader.h"
 #include "Structs.h"
+#include "Dom/JsonValue.h"
+#include "UObject/Class.h"
 
 UImportWorldCommandlet::UImportWorldCommandlet(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer) {
@@ -120,7 +122,7 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 
 	//TSharedPtr<FJsonObject> RootJsonObject = MakeShareable(new FJsonObject);
 
-	TSharedRef<FJsonObject> RootObject = MakeShareable(new FJsonObject);
+	TSharedPtr<FJsonObject> RootObject = MakeShareable(new FJsonObject);
 
 	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(InputJSON);
 
@@ -179,7 +181,7 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 
 	int32 NumberRegionsDataImported = 0;
 	
-	for (auto Value : RegionsObject->Values) {
+	for (auto Value : RegionsDataObject->Values) {
 		TArray<FString> Coords;
 		Value.Key.ParseIntoArray(Coords, TEXT("_"));
 
@@ -202,6 +204,8 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 			continue;
 		}
 
+		TArray<FVoxelWorldActorRecord> importedActorRecords;
+
 		for(auto& ActorData:*RegionalDataActors) {
 			const TSharedPtr<FJsonObject>* ActorDataObject;
 			if(!ActorData->TryGetObject(ActorDataObject)) {
@@ -209,26 +213,14 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 				continue;
 			}
 
-			/*
-			 *
-			 *{
-					"actor_class": "/Game/BPs/Entity/Nodes/BP_StoneNode.BP_StoneNode_C",
-					"actor_transform": "1200.000000,1700.000000,0.000000|-9.429745,-107.329475,-9.429790|0.954106,0.954106,0.954106",
-					"actor_PID": "0",
-					"actor_data": "DgAAAGJDYW5CZURhbWFnZWQADQAAAEJvb2xQcm9wZXJ0eQAAAAAAAAAAAAEABQAAAE5vbmUAAAAAAA==",
-					"actor_components": []
-				}
-			 * 
-			 */
-
-			bool success = true;
+			bool success = true; // todo replace with if for each field for more accurate error logging
 			FVoxelWorldActorRecord newRecord;
 
 			success &= ActorDataObject->Get()->TryGetStringField("actor_class", newRecord.ActorClass);
 
 			FString transformString;
 			success &= ActorDataObject->Get()->TryGetStringField("actor_transform", transformString);
-			newRecord.ActorTransform.InitFromString(transformString);
+			success &= newRecord.ActorTransform.InitFromString(transformString);
 
 			FString actorPIDString;
 			success &= ActorDataObject->Get()->TryGetStringField("actor_pid", actorPIDString);
@@ -237,19 +229,64 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 			FString actorDataString;
 			success &= ActorDataObject->Get()->TryGetStringField("actor_data", actorDataString);
 			success &= FBase64::Decode(actorDataString, newRecord.ActorData);
+
+			const TArray<TSharedPtr<FJsonValue>>* ActorComponentsArray;
+			success &= ActorDataObject->Get()->TryGetArrayField("actor_components", ActorComponentsArray);
+				
+			for(auto& CompData:*ActorComponentsArray) {
+				const TSharedPtr<FJsonObject>* CompDataObject;
+				if(!CompData->TryGetObject(CompDataObject)) {
+					UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse a component on an actor in region [%s] expected an object. Skipping."), *Value.Key);
+					continue;
+				}
+				// parse component record like above
+				FVoxelWorldComponentRecord compRecord;
+
+				if(!CompDataObject->Get()->TryGetStringField("component_class", compRecord.ComponentClass)) {
+					UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the class of a component on an actor in region [%s] expected a string. Skipping."), *Value.Key);
+					continue;
+				}
+
+				FString compTransformString;
+				if(!CompDataObject->Get()->TryGetStringField("component_transform", compTransformString)) {
+					UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the transform of a component on an actor in region [%s] expected a string. Skipping."), *Value.Key);
+					continue;
+				}
+				compRecord.ComponentTransform.InitFromString(compTransformString); // todo add check
+
+				FString spawnIfNotFoundString;
+				if(!CompDataObject->Get()->TryGetStringField("component_spawn_if_not_found", spawnIfNotFoundString)) {
+					UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the spawn if not found flag of a component on an actor in region [%s] expected a string. Skipping."), *Value.Key);
+					continue;
+				}
+				compRecord.bSpawnIfNotFound = spawnIfNotFoundString.ToBool();
+
+				FString compDataString;
+				if(!CompDataObject->Get()->TryGetStringField("component_data", compDataString)) {
+					UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to parse the data field of a component on an actor in region [%s] expected a string. Skipping."), *Value.Key);
+					continue;
+				}
+				FBase64::Decode(compDataString, compRecord.ComponentData);//todo check
+
+				newRecord.ActorComponents.Add(compRecord);
+			}
+			importedActorRecords.Add(newRecord);
 		}
 
-		TArray<uint8> decodedBase64;
-		if(!FBase64::Decode(value, decodedBase64)) { // todo allow hex
-			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to decode the region value associated with the key [%s] expected Base64. Skipping."), *Value.Key);
-			continue;
-		}
 
-		if(!StorageProvider->PutRegionBinary(FIntVector(FCString::Atoi(*Coords[0]),FCString::Atoi(*Coords[1]),FCString::Atoi(*Coords[2])), decodedBase64)) {
-			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to save the region [%s] to the new database. Skipping."), *Value.Key);
+		//TArray<uint8> actorRecordsBytes;
+		
+		FBufferArchive region_actors(true);
+		region_actors << importedActorRecords;
+
+		region_actors.Flush();
+		
+		if(!StorageProvider->PutRegionalData(FIntVector(FCString::Atoi(*Coords[0]),FCString::Atoi(*Coords[1]),FCString::Atoi(*Coords[2])), 0, region_actors)) {
+			UE_LOG(LogImportWorldCommandlet, Warning, TEXT("Failed to save the region data for region [%s] to the new database. Skipping."), *Value.Key);
 			continue;
 		}
-		NumberRegionsImported++;
+		region_actors.Close();
+		NumberRegionsDataImported++;
 	}
 	
 	// do players
@@ -444,25 +481,6 @@ int32 UImportWorldCommandlet::Main(const FString& Params) {
 			}
 		});*/
 
-	RootObject.Get().SetObjectField("players", PlayersDataObject);
-	if (bDumpRegions) {
-		RootObject.Get().SetObjectField("regions_data", RegionsDataObject);
-		if (bDumpTerrain) { RootObject.Get().SetObjectField("regions_terrain", RegionsObject); }
-	}
-
-	FString OutputString;
-	TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&OutputString);
-
-	FJsonSerializer::Serialize(RootObject, Writer);
-
-	TArray<FStringFormatArg> Args;
-	Args.Emplace(FPaths::ProjectSavedDir());
-	Args.Emplace(WorldLocation);
-	Args.Emplace(FDateTime::Now().ToUnixTimestamp());
-
-	FString OutPath = FString::Format(TEXT("{0}/{1}_export_{2}.json"), Args);
-
-	FFileHelper::SaveStringToFile(OutputString, *OutPath);
 
 	///////////////////////////////////////////////////////////
 
