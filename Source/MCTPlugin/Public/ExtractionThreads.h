@@ -19,26 +19,18 @@ namespace ExtractionThreads {
 		}
 
 		void DoWork() {
-			bool bDidLock = false;
-			
-			try{
 			FExtractionTaskOutput output;
-			output.section.AddDefaulted(world->TerrainMaterials.Num());
+			output.section.AddDefaulted(MAX_MATERIALS);
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE,
 			                                                 lower.Z + REGION_SIZE));
-				
+			
 			world->VolumeMutex.Lock();
-			bDidLock = true;
-			//UE_LOG(LogVoxelWorld, Warning, TEXT("Capturing voxels to make packet [%s]."), *lower.ToString());
-				
-			if(!world->VoxelVolume.IsValid()) { // best to check its still valid after lock
-				world->VolumeMutex.Unlock();
-				return;
-			}
-				
+
+			if(!world->VoxelVolume.IsValid()) return;
+			
 			if (world->bIsVoxelNetServer) {
 				/*
 										   *    We generate the packet in the extraction thread because: 
@@ -56,16 +48,12 @@ namespace ExtractionThreads {
 				packet.y = lower.Y;
 				packet.z = lower.Z;
 
-				packetOutput.bIsEmpty = true;
-				
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
 						for (int32 z = 0; z < REGION_SIZE; z++) {
 							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
 							packet.data[0][x][y][z] = voxel.getMaterial();
 							packet.data[1][x][y][z] = voxel.getDensity();
-
-							if(packet.data[0][x][y][z] > 0) packetOutput.bIsEmpty = false;
 						}
 					}
 				}
@@ -79,7 +67,7 @@ namespace ExtractionThreads {
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 			}
 			// end packet generation
-				
+			
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
 			world->VolumeMutex.Unlock();
 
@@ -89,11 +77,9 @@ namespace ExtractionThreads {
 
 			//FVector OffsetLocation = FVector(0,0,0);//FVector(lower);
 
-			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
-				output.bIsEmpty = true;
-				world->extractionQueue.Enqueue(output);
+			if (decoded.getNoOfIndices() == 0)
 				return;
-			}
+
 
 			for (int32 Material = 0; Material < world->TerrainMaterials.Num(); Material++) {
 				// Loop over all of the triangle vertex indices
@@ -139,17 +125,6 @@ namespace ExtractionThreads {
 			//////////////////////////
 
 			world->extractionQueue.Enqueue(output);
-				}
-			catch (std::exception e) {
-					if(bDidLock) world->VolumeMutex.Unlock();
-					world->OnFatalError();
-					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s] [%s]."), *lower.ToString(), *FString(e.what()))
-				}
-			catch (...) {
-					if(bDidLock) world->VolumeMutex.Unlock();
-					world->OnFatalError();
-					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask caught exception extracting [%s]."), *lower.ToString())
-				}
 		}
 	};
 
@@ -172,9 +147,8 @@ namespace ExtractionThreads {
 		}
 
 		void DoWork() {
-			try{
 			FExtractionTaskOutput output;
-			output.section.AddDefaulted(world->TerrainMaterials.Num());
+			output.section.AddDefaulted(MAX_MATERIALS);
 			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
@@ -202,16 +176,12 @@ namespace ExtractionThreads {
 				packet.y = lower.Y;
 				packet.z = lower.Z;
 
-				packetOutput.bIsEmpty = true;
-				
 				for (int32 x = 0; x < REGION_SIZE; x++) {
 					for (int32 y = 0; y < REGION_SIZE; y++) {
 						for (int32 z = 0; z < REGION_SIZE; z++) {
 							auto voxel = world->VoxelVolume.Get()->getVoxel(lower.X + x, lower.Y + y, lower.Z + z);
 							packet.data[0][x][y][z] = voxel.getMaterial();
 							packet.data[1][x][y][z] = voxel.getDensity();
-
-							if(packet.data[0][x][y][z] > 0) packetOutput.bIsEmpty = false;
 						}
 					}
 				}
@@ -223,7 +193,6 @@ namespace ExtractionThreads {
 				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
-				
 			}
 			// end packet generation
 			
@@ -236,11 +205,8 @@ namespace ExtractionThreads {
 
 			FVector OffsetLocation = FVector(lower);
 
-			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
-				output.bIsEmpty = true;
-				world->extractionQueue.Enqueue(output);
+			if (decoded.getNoOfIndices() == 0)
 				return;
-			}
 
 
 			for (int32 Material = 0; Material < world->TerrainMaterials.Num(); Material++) {
@@ -290,10 +256,6 @@ namespace ExtractionThreads {
 			//////////////////////////
 
 			world->extractionQueue.Enqueue(output);
-				}catch (...) {
-					world->OnFatalError();
-					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] CubicExtractionTask caught exception extracting [%s]."), *lower.ToString())
-				}
 		}
 	};
 

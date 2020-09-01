@@ -24,16 +24,14 @@ public:
 	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) APagedWorld* world;
 
 	UFUNCTION(Category = "Paging Component", BlueprintPure) bool ShouldFreezePawn() const;
-	UFUNCTION(Category = "Paging Component", BlueprintCallable) bool PrepareToTeleport(const FVector& Destination);
+	UFUNCTION(Category = "Paging Component", BlueprintCallable) bool PrepareToTeleport(const FVector Destination);
 
 	void OnSentRegionPacket(int Num);
 	int32 ExpectedRegions = 0;
 	bool bIsPreparingTeleport = false;
 	
-	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) TSet<FIntVector> subscribedRegions;
-	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere) TSet<FIntVector> waitingForPackets;
-	UPROPERTY(Category = "Paging Component", BlueprintReadOnly, VisibleAnywhere, Replicated) int32 DebugWaitingForAmount = 0;
-
+	TSet<FIntVector> subscribedRegions;
+	TSet<FIntVector> waitingForPackets;
 
 	FVector GetPagingLocation() const;
 	

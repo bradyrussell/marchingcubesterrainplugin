@@ -24,10 +24,6 @@ public:
 	/* StorageProvider Interface */
 	virtual bool Open(std::string Database, bool bCreateIfNotFound) override;
 	virtual bool Close() override;
-
-
-	bool Keys(TArray<FString>& OutKeys) override;
-	bool ForEach(TFunction<void(std::string Key, std::string Value)> CalledForEach) override;
 	
 	virtual bool Put(std::string Key, std::string Value)  override;
 	virtual bool Get(std::string Key, std::string& Value) override;
@@ -35,10 +31,6 @@ public:
 	virtual const char* GetProviderName() override;
 	virtual std::string GetDatabasePath(std::string Name) override;
 	std::string SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) override;
-
-	
 	/* End StorageProvider Interface */
 
-	FIntVector4 DeserializeLocationFromString(std::string Key) override;
-	bool IsRegionKey(std::string Key) override;
 };

@@ -32,41 +32,6 @@ bool StorageProviderLevelDB::Close() {
 	return true;
 }
 
-bool StorageProviderLevelDB::Keys(TArray<FString>& OutKeys) {
-	if(!db) return false;
-	
-	leveldb::ReadOptions ropt;
-	ropt.fill_cache = false;
-	
-	auto KeyItr = db->NewIterator(ropt);
-	KeyItr->SeekToFirst();
-
-	while(KeyItr->Valid()) {
-		std::string key = KeyItr->key().ToString();
-		OutKeys.Emplace(FString(UTF8_TO_TCHAR(key.c_str())));
-		KeyItr->Next();
-	}
-
-	return true;
-}
-
-bool StorageProviderLevelDB::ForEach(TFunction<void(std::string Key, std::string Value)> CalledForEach) {
-	if(!db) return false;
-	
-	leveldb::ReadOptions ropt;
-	ropt.fill_cache = false;
-	
-	auto KeyItr = db->NewIterator(ropt);
-	KeyItr->SeekToFirst();
-
-	while(KeyItr->Valid()) {
-		CalledForEach(KeyItr->key().ToString(), KeyItr->value().ToString());
-		KeyItr->Next();
-	}
-
-	return true;
-}
-
 bool StorageProviderLevelDB::Put(std::string Key, std::string Value) {
 	const auto status = db->Put(leveldb::WriteOptions(), MakeKey(Key),Value);
 	return status.ok();

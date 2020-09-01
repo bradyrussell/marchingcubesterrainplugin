@@ -3,7 +3,6 @@
 
 #include "Config.h"
 #include "Serialization/BufferArchive.h"
-#include "Serialization/MemoryReader.h"
 
 StorageProviderBase::StorageProviderBase()
 	: KeyPrefix(""), KeySuffix("") {
@@ -145,125 +144,6 @@ bool StorageProviderBase::GetRegion(FIntVector Region, PolyVox::PagedVolume<Poly
 	}
 }
 
-bool StorageProviderBase::PutRegionBinary(FIntVector Region, TArray<uint8>& Bytes) {
-	int32 BytesIndex = 0;
-	
-	// todo make batched write
-	//bool success = true;
-	if (bRegionsUseSingleKey) {
-		char byteBuf[2 * REGION_SIZE * REGION_SIZE * REGION_SIZE]; // 65kb for 32^3, material and density 1 byte each
-		int n = 0;
-		//since we are saving big keys this order should optimize compression
-
-		for (char x = 0; x < REGION_SIZE; x++) {
-			for (char y = 0; y < REGION_SIZE; y++) {
-				for (char w = 0; w < REGION_SIZE; w++) {
-					byteBuf[n] = Bytes[BytesIndex++];
-					byteBuf[n + (REGION_SIZE * REGION_SIZE * REGION_SIZE)] = Bytes[BytesIndex++];
-					n++;
-				}
-			}
-		}
-
-		return Put(SerializeLocationToString(Region.X, Region.Y, Region.Z, 0), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE * REGION_SIZE));;
-	}
-	else {
-		for (char w = 0; w < REGION_SIZE; w++) {
-			// for each x,y layer
-			char byteBuf[2 * REGION_SIZE * REGION_SIZE]; // 2kb for 32^2, material and density 1 byte each
-
-			int n = 0; // this could be better if we were to calculate it from xy so it is independent of order?
-			// x + (y*REGION_SIZE)
-			//but compression may be better in order like this
-
-			for (char x = 0; x < REGION_SIZE; x++) {
-				for (char y = 0; y < REGION_SIZE; y++) {
-
-					byteBuf[n++] = Bytes[BytesIndex++];
-					byteBuf[n++] = Bytes[BytesIndex++];
-				}
-			}
-
-			auto b = Put(SerializeLocationToString(Region.X, Region.Y, Region.Z, w), std::string(byteBuf, 2 * REGION_SIZE * REGION_SIZE));
-			if (!b)
-				return false;
-		}
-		return true;
-	}
-}
-
-bool StorageProviderBase::GetRegionBinary(FIntVector Region, TArray<uint8>& Bytes) {
-
-	
-		bool containsNonZero = false;
-
-	if (bRegionsUseSingleKey) {
-		//for (char w = 0; w < REGION_SIZE; w++) {
-			std::string chunkData;
-
-			auto status = Get(SerializeLocationToString(Region.X, Region.Y, Region.Z, 0), chunkData);
-
-			if (!status) {
-				return false;
-			}
-
-			int n = 0;
-
-		for (char x = 0; x < REGION_SIZE; x++) {
-			for (char y = 0; y < REGION_SIZE; y++) {
-				for (char w = 0; w < REGION_SIZE; w++) {
-					unsigned char mat = chunkData[n]; // signed - > unsigned conversion
-					unsigned char den = chunkData[n + (REGION_SIZE * REGION_SIZE * REGION_SIZE)];
-					n++;
-
-					if (mat != 0)
-						containsNonZero = true;
-					Bytes.Emplace(mat);
-					Bytes.Emplace(den);
-				}
-			}
-		}
-#ifdef REGEN_NULL_REGIONS
-	return containsNonZero;
-#else REGEN_NULL_REGIONS
-		return true;
-#endif
-	}
-	else {
-		for (char w = 0; w < REGION_SIZE; w++) {
-			std::string chunkData;
-
-			auto status = Get(SerializeLocationToString(Region.X, Region.Y, Region.Z, w), chunkData);
-			//auto status = db->Get(leveldb::ReadOptions(), StorageProviderBase::SerializeLocationToString(pos.X, pos.Y, pos.Z, w), &chunkData);
-
-			if (!status) {
-				if (w > 0)
-				UE_LOG(LogTemp, Warning, TEXT("Loading failed partway through %s region : failed at layer %d. Region data unrecoverable."), *Region.ToString(), w);
-				return false;
-			}
-
-			int n = 0; // this could be better if we were to calculate it from xy so it is independent of order
-
-			for (char x = 0; x < REGION_SIZE; x++) {
-				for (char y = 0; y < REGION_SIZE; y++) {
-					unsigned char mat = chunkData[n++]; // signed - > unsigned conversion
-					unsigned char den = chunkData[n++];
-
-					if (mat != 0)
-						containsNonZero = true;
-					Bytes.Emplace(mat);
-					Bytes.Emplace(den);
-				}
-			}
-		}
-#ifdef REGEN_NULL_REGIONS
-	return containsNonZero;
-#else REGEN_NULL_REGIONS
-		return true;
-#endif
-	}
-}
-
 
 bool StorageProviderBase::PutRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes) {
 	return PutBytes(SerializeLocationToString(Region.X, Region.Y, Region.Z, Index + REGION_SIZE), Bytes);
@@ -277,14 +157,6 @@ bool StorageProviderBase::PutGlobalData(std::string Key, TArray<uint8>& Bytes) {
 
 bool StorageProviderBase::GetGlobalData(std::string Key, TArray<uint8>& Bytes) { return GetBytes(DB_GLOBAL_TAG + Key, Bytes); }
 
-bool StorageProviderBase::PutGlobalString(std::string Key, std::string String) {
-	return Put(DB_GLOBAL_TAG + Key, String);
-}
-
-bool StorageProviderBase::GetGlobalString(std::string Key, std::string& String) {
-	return Get(DB_GLOBAL_TAG + Key, String);
-}
-
 int StorageProviderBase::GetDatabaseFormat() {
 	std::string value;
 	const auto bExists = Get(DB_VERSION_TAG, value);
@@ -293,7 +165,7 @@ int StorageProviderBase::GetDatabaseFormat() {
 
 bool StorageProviderBase::SetDatabaseFormat(int Format) {
 	char buf[16];
-	_itoa_s(Format, buf, 10);
+	_itoa(Format, buf, 10);
 	return Put(DB_VERSION_TAG, buf);
 }
 
@@ -329,10 +201,6 @@ void StorageProviderBase::SetKeySuffix(std::string Suffix) { KeySuffix = Suffix;
 
 std::string StorageProviderBase::MakeKey(std::string Key) const { return KeyPrefix + Key + KeySuffix; }
 
-bool StorageProviderBase::IsRegionKey(std::string Key) {
-	return Key.length()==13;
-}
-
 std::string StorageProviderBase::SerializeLocationToString(int32_t X, int32_t Y, int32_t Z, uint8 W) {
 	FBufferArchive tempBuffer(true);
 	tempBuffer << X;
@@ -340,33 +208,5 @@ std::string StorageProviderBase::SerializeLocationToString(int32_t X, int32_t Y,
 	tempBuffer << Z;
 	tempBuffer << W;
 
-	tempBuffer.Flush();
-
-	std::string r = ArchiveToString(tempBuffer);
-	
-	tempBuffer.Close();
-	
-	return r;
-}
-
-FIntVector4 StorageProviderBase::DeserializeLocationFromString(std::string Key) {
-	TArray<uint8> data;
-	ArchiveFromString(Key,data);
-
-	FMemoryReader reader(data, true);
-
-	FIntVector4 OutV4;
-	uint8 w;
-
-	reader << OutV4.X;
-	reader << OutV4.Y;
-	reader << OutV4.Z;
-	reader << w;
-
-	OutV4.W = w;
-
-	reader.Flush();
-	reader.Close();
-	
-	return OutV4;
+	return ArchiveToString(tempBuffer);
 }

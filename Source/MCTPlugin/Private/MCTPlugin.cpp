@@ -4,19 +4,6 @@
 
 #define LOCTEXT_NAMESPACE "FMCTPluginModule"
 
-/*
- *
- *
- * 
-	DECLARE_LOG_CATEGORY_EXTERN(LogVoxelNet, Log, All);
-	DECLARE_LOG_CATEGORY_EXTERN(LogVoxelWorld, Log, All);
-	DECLARE_LOG_CATEGORY_EXTERN(LogVoxelDatabase, Log, All);
- */
-
-DEFINE_LOG_CATEGORY(LogVoxelNet);
-DEFINE_LOG_CATEGORY(LogVoxelWorld);
-DEFINE_LOG_CATEGORY(LogVoxelDatabase);
-
 void FMCTPluginModule::StartupModule() {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
 }

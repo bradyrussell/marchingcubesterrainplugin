@@ -38,9 +38,7 @@ public class MCTPlugin : ModuleRules
                 "Projects",
                 "Engine",
                 "Sockets",
-                "Networking",
-                "Json",
-                "JsonUtilities"
+                "Networking"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
