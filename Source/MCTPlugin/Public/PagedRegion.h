@@ -30,12 +30,21 @@ public:
 
 	UPROPERTY(Category = "Voxel Terrain - World", BlueprintReadWrite, Replicated, EditAnywhere, meta = (ExposeOnSpawn = "true")) APagedWorld* World;
 	
-	URuntimeMeshProviderStatic* StaticProvider;
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly) URuntimeMeshProviderStatic* StaticProvider;
 
 	UFUNCTION(BlueprintCallable) void UpdateNavigation() const;
 	UFUNCTION(BlueprintCallable, BlueprintPure) FIntVector GetRegionLocation() const;
-	void RenderParsed(FExtractionTaskOutput output);
+	void RenderParsed(const FExtractionTaskOutput& output);
 
+	// has the region been meshed on the local machine
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bReadyLocally = false;
+
+	// whether the region has polys
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly) bool bEmptyLocally = true;
+
+	// has the region been meshed on the server
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bReadyServer = false;
+	UPROPERTY(Category = "Voxel Terrain", BlueprintReadOnly, VisibleInstanceOnly, Replicated) bool bEmptyServer = true;
 private:
-	bool bSectionExists[MAX_MATERIALS];
+	TArray<bool> bSectionExists;
 };

@@ -1,9 +1,8 @@
 #pragma once
 
 // voxel config
-#define REGION_SIZE 32 //voxels
+#define REGION_SIZE 64 //voxels
 #define VOXEL_SIZE 100 // cm
-#define MAX_MATERIALS 6
 
 #define VOXELNET_PORT 9292//9797
 
@@ -22,4 +21,4 @@
 // #define REGIONAL_DATA_CONTAINER 2 // store all item containers in the chunk
 // #define REGIONAL_DATA_RESOURCES 3 // store dropped items
 //
-// #define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for VOXEL_SIZE of 32
+// #define REGIONAL_DATA_MAX 255-REGION_SIZE // 223 for REGION_SIZE of 32
