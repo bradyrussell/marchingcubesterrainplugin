@@ -38,6 +38,11 @@ namespace ExtractionThreads {
 				world->VolumeMutex.Unlock();
 				return;
 			}
+
+				// moved up to allow extract...() to do memory management first?
+
+			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
+			
 				
 			if (world->bIsVoxelNetServer) {
 				/*
@@ -78,9 +83,7 @@ namespace ExtractionThreads {
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 			}
-			// end packet generation
-				
-			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
+			// end packet generation				
 			world->VolumeMutex.Unlock();
 
 			auto decoded = decodeMesh(ExtractedMesh);
