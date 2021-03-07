@@ -285,7 +285,7 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 								CurrentPropertyObject->SetStringField("name",Property->GetName());
 								CurrentPropertyObject->SetNumberField("size", Property->GetSize());
 								CurrentPropertyObject->SetStringField("type",Property->GetCPPType());
-								CurrentPropertyObject->SetStringField("desc",Property->GetDesc());
+								//CurrentPropertyObject->SetStringField("desc",Property->GetDesc());
 
 								ActorPropertiesObjects.Add(MakeShareable(new FJsonValueObject(CurrentPropertyObject)));
 							}
