@@ -11,25 +11,8 @@
 class MCTPLUGIN_API WorldGeneratorBase
 {
 public:
-
-	enum {
-	Block_Air,
-	Block_Grass,
-	Block_Dirt,
-	Block_Stone,
-	Block_Iron,
-	Block_Gold,
-	Block_Gunpowder,
-};
-	
-	const TArray<UUFNNoiseGenerator*> NoiseGenerators;
-	
 	WorldGeneratorBase();
 	virtual ~WorldGeneratorBase();
-
-	explicit WorldGeneratorBase(const TArray<UUFNNoiseGenerator*>& NoiseGenerators)
-		: NoiseGenerators(NoiseGenerators) {
-	}
 
 	/* WorldGenerator Interface */
 	virtual int32 GetHeightmap(int32 X, int32 Y) = 0;
@@ -37,5 +20,4 @@ public:
 	
 	virtual const char* GetGeneratorName() = 0;
 	/* End WorldGenerator Interface */
-
 };

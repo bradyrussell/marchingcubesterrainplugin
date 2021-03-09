@@ -13,7 +13,6 @@
 #include "StorageProviderBase.h"
 #include "StorageProviderLevelDB.h"
 #include "Async/Async.h"
-#include "WorldGeneratorPlains.h"
 #include "StorageProviderNull.h"
 #include "ISavableComponent.h"
 #include "MCTPlugin.h"

@@ -11,10 +11,10 @@
 class MCTPLUGIN_API WorldGeneratorMars : public WorldGeneratorBase
 {
 public:
-
-
+	const TArray<UUFNNoiseGenerator*> NoiseGenerators;
+	
 	explicit WorldGeneratorMars(const TArray<UUFNNoiseGenerator*>& NoiseGenerators)
-		: WorldGeneratorBase(NoiseGenerators) {
+		: NoiseGenerators(NoiseGenerators) {
 	}
 
 	/* WorldGenerator Interface */
@@ -23,6 +23,4 @@ public:
 	
 	const char* GetGeneratorName() override;
 	/* End WorldGenerator Interface */
-
-
 };
