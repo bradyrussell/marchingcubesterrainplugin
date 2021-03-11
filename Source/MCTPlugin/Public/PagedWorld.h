@@ -84,6 +84,8 @@ public:
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(const FIntVector& VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(const FVector& WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(const FIntVector& VoxelCoords);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToLocalVoxelCoords(const FIntVector& VoxelCoords);
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector LocalVoxelToVoxelCoords(const FIntVector& LocalVoxelCoords, const FIntVector& RegionCoords);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable, NetMulticast, Reliable) void Multi_ModifyVoxel(const FIntVector& VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
 	//UFUNCTION(Category = "Voxel World", BlueprintCallable, Server, Reliable, WithValidation) void Server_ModifyVoxel(const FIntVector& VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause = nullptr, bool bIsSpherical = false, bool bShouldDrop = true);
 	UPROPERTY(BlueprintAssignable, Category="Voxel Update Event") FVoxelWorldUpdate VoxelWorldUpdate_Event;
@@ -99,6 +101,11 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void PinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radius);
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void UnpinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radius);
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly) void ClearPinnedRegions();
+
+	// copy a region into an array we can access from bp
+	UFUNCTION(Category = "Voxel World|Region Voxels", BlueprintCallable, BlueprintAuthorityOnly) FRegionVoxels GetRegionVoxels(const FIntVector& RegionCoords);
+	UFUNCTION(Category = "Voxel World|Region Voxels", BlueprintCallable, BlueprintPure) static uint8 GetRegionVoxelMaterial(const FRegionVoxels& RegionVoxels, FIntVector LocalVoxelCoordinates);
+	UFUNCTION(Category = "Voxel World|Region Voxels", BlueprintCallable, BlueprintPure) static uint8 GetRegionVoxelDensity(const FRegionVoxels& RegionVoxels, FIntVector LocalVoxelCoordinates);
 	
 	/* Database */
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);

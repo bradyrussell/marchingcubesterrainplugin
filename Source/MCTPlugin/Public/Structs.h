@@ -71,6 +71,14 @@ struct FPacketTaskOutput // compressed packet information for a region
 };
 
 USTRUCT(BlueprintType)
+struct FRegionVoxels // a region of voxels copied in a game-readable format
+{
+	GENERATED_BODY()
+	int32 Material[REGION_SIZE][REGION_SIZE][REGION_SIZE];
+	int32 Density[REGION_SIZE][REGION_SIZE][REGION_SIZE];
+};
+
+USTRUCT(BlueprintType)
 struct FVoxelUpdate // a change of a group of voxels from any type to a single new type
 {
 	GENERATED_BODY()

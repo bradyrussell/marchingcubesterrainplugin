@@ -80,7 +80,7 @@ namespace ExtractionThreads {
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 
-				tempDebug_PacketWasEmpty = packetOutput.bIsEmpty;
+				tempDebug_PacketWasEmpty = packetOutput.bIsEmpty; // why is this inverted??
 			}
 			// end packet generation
 
@@ -95,16 +95,18 @@ namespace ExtractionThreads {
 			//FVector OffsetLocation = FVector(0,0,0);//FVector(lower);
 
 				
-			/*
+			/* 
 			 * 3/7/21  are there situations where all voxels are empty but there is still a mesh ? 
 			 *	if not we can just check the packet on the server for bIsEmpty to skip the volume reads
-			 */
+			 */ // i dont think this works
 			if(world->bIsVoxelNetServer) {
 				// if this asserts false then the above optimization is not valid
 				if(!(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0))) {
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask packet empty != indices empty: %d vs %d"), tempDebug_PacketWasEmpty, decoded.getNoOfIndices())
-				}
-				assert(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0));
+				}/* else {
+					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask packet empty == indices empty: %d vs %d"), tempDebug_PacketWasEmpty, decoded.getNoOfIndices())
+				}*/
+				//assert(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0));
 			}
 			//////////////////////////////////
 				

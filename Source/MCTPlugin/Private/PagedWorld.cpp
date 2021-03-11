@@ -38,7 +38,7 @@ APagedWorld::~APagedWorld() {
 void APagedWorld::BeginPlay() {
 	Super::BeginPlay();
 	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
-	
+
 	const int32 NUMBER_OF_POOLS = 1;
 	//const int32 NumCoresPerPool = bShareCores ? FPlatformMisc::NumberOfCoresIncludingHyperthreads() : FPlatformMisc::NumberOfCoresIncludingHyperthreads() / NUMBER_OF_POOLS;
 	const int32 NumCoresPerPool = 4; // todo testing
@@ -104,18 +104,20 @@ void APagedWorld::WorldNewRegionsTick() {
 			}
 			remainingRegionsToGenerate--;
 
-			if(!gen.bIsEmpty) {
+			if (!gen.bIsEmpty) {
 				bool needed = false;
-				for(auto pager:pagingComponents) {
-					if(pager->subscribedRegions.Contains(gen.pos)) { // is anyone subscribed to this
+				for (auto pager : pagingComponents) {
+					if (pager->subscribedRegions.Contains(gen.pos)) {
+						// is anyone subscribed to this
 						needed = true;
 						break;
 					}
 				}
 
-				if(needed) PacketsToSendOrResendToSubscribersNextExtraction.Emplace(gen.pos);
+				if (needed)
+					PacketsToSendOrResendToSubscribersNextExtraction.Emplace(gen.pos);
 			}
-			
+
 			MarkRegionDirtyAndAdjacent(gen.pos);
 			if (RegionGenerated_Event.IsBound())
 				RegionGenerated_Event.Broadcast(gen.pos);
@@ -155,14 +157,14 @@ void APagedWorld::VoxelNetServerTick() {
 		FPacketTaskOutput output;
 		VoxelNetServer_packetQueue.Dequeue(output);
 		VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
-		
-		if(!output.bIsEmpty) { // we only request non air regions to be resent
-			if(PacketsToSendOrResendToSubscribersNextExtraction.Contains(output.region)) {
+
+		if (!output.bIsEmpty) {
+			// we only request non air regions to be resent
+			if (PacketsToSendOrResendToSubscribersNextExtraction.Contains(output.region)) {
 				PacketsReadyToSendOrResend.Emplace(output.region);
 				PacketsToSendOrResendToSubscribersNextExtraction.Remove(output.region);
 			}
 		}
-
 	}
 }
 
@@ -171,7 +173,7 @@ void APagedWorld::Tick(float DeltaTime) {
 
 	//auto ResendClone = PacketsReadyToSendOrResend; // because we add to this in WorldNewRegionsTick()
 	//PacketsToSendOrResendToSubscribersNextExtraction.Reset();
-	
+
 	// get any recently generated packets and put them in the queue
 	if (bIsVoxelNetServer) { VoxelNetServerTick(); }
 #ifdef WORLD_TICK_TRACKING
@@ -221,29 +223,29 @@ void APagedWorld::Tick(float DeltaTime) {
 		//TArray<FIntVector> VoxelNetServer_justCookedRegions;
 
 		TSet<FIntVector> ForceSendRegions;
-		
+
 		while (!extractionQueue.IsEmpty()) {
 			FExtractionTaskOutput gen;
 			extractionQueue.Dequeue(gen);
 			NumRegionsPendingExtraction--;
 			auto reg = getRegionAt(gen.region);
 
-			if(PacketsReadyToSendOrResend.Contains(gen.region)) {
+			if (PacketsReadyToSendOrResend.Contains(gen.region)) {
 				ForceSendRegions.Emplace(gen.region);
 				PacketsReadyToSendOrResend.Remove(gen.region);
 			}
-			
+
 			if (reg != nullptr) {
 				reg->RenderParsed(gen);
-				if(!gen.bIsEmpty) {
+				if (!gen.bIsEmpty) {
 					reg->UpdateNavigation();
-					SetHighestGeneratedRegionAt(gen.region.X,gen.region.Y,gen.region.Z);
+					SetHighestGeneratedRegionAt(gen.region.X, gen.region.Y, gen.region.Z);
 				}
 			}
 			else {
-				if(!gen.bIsEmpty)
-					UE_LOG(LogVoxelWorld, Warning, TEXT("Non-air region was meshed but actor has not replicated."));
-				
+				if (!gen.bIsEmpty)
+				UE_LOG(LogVoxelWorld, Warning, TEXT("Non-air region was meshed but actor has not replicated."));
+
 				OnRegionError(gen.region);
 			}
 		}
@@ -261,7 +263,7 @@ void APagedWorld::Tick(float DeltaTime) {
 				TSet<FIntVector> cacheSet = TSet<FIntVector>(cachedPackets);
 
 				pager->waitingForPackets.Append(pager->subscribedRegions.Intersect(ForceSendRegions));
-				
+
 				for (auto& waitingFor : pager->waitingForPackets.Intersect(cacheSet)) {
 					auto packetToSend = VoxelNetServer_regionPackets.FindRef(waitingFor);
 					// where waitingFor and the cache intersect send packets					
@@ -314,6 +316,36 @@ void APagedWorld::UnpinRegionsInRadius(const FIntVector& VoxelCoords, int32 Radi
 
 void APagedWorld::ClearPinnedRegions() { ForceLoadedRegions.Reset(); }
 
+FRegionVoxels APagedWorld::GetRegionVoxels(const FIntVector& RegionCoords) {
+	FRegionVoxels region;
+	
+	VolumeMutex.Lock();
+
+	for (int x = 0; x < REGION_SIZE; x++) {
+		for (int y = 0; y < REGION_SIZE; y++) {
+			for (int z = 0; z < REGION_SIZE; z++) {
+				auto MaterialDensityPair = VoxelVolume.Get()->getVoxel(x,y,z);
+				region.Material[x][y][z] = MaterialDensityPair.getMaterial();
+				region.Density[x][y][z] = MaterialDensityPair.getDensity();
+			}
+		}
+	}
+
+	VolumeMutex.Unlock();
+
+	return region;
+}
+
+uint8 APagedWorld::GetRegionVoxelMaterial(const FRegionVoxels& RegionVoxels, FIntVector LocalVoxelCoordinates) {
+	if(LocalVoxelCoordinates.GetMax() >= REGION_SIZE || LocalVoxelCoordinates.GetMin() < 0) return -1;
+	return RegionVoxels.Material[LocalVoxelCoordinates.X][LocalVoxelCoordinates.Y][LocalVoxelCoordinates.Z];
+}
+
+uint8 APagedWorld::GetRegionVoxelDensity(const FRegionVoxels& RegionVoxels, FIntVector LocalVoxelCoordinates) {
+	if(LocalVoxelCoordinates.GetMax() >= REGION_SIZE || LocalVoxelCoordinates.GetMin() < 0) return -1;
+	return RegionVoxels.Density[LocalVoxelCoordinates.X][LocalVoxelCoordinates.Y][LocalVoxelCoordinates.Z];
+}
+
 void APagedWorld::ConnectToDatabase(FString Name) {
 	if (bIsVoxelNetServer || bIsVoxelNetSingleplayer) {
 		bHasStarted = true;
@@ -329,41 +361,42 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 
 		const auto compatible = WorldStorageProvider->VerifyDatabaseFormat(DB_VERSION);
 
-		UE_LOG(LogVoxelDatabase, Warning, TEXT("Database version for %s: %d. %s"), *Name, WorldStorageProvider->GetDatabaseFormat(), compatible? TEXT("Version is compatible.") : TEXT("Version is NOT compatible! Cannot load data."));
+		UE_LOG(LogVoxelDatabase, Warning, TEXT("Database version for %s: %d. %s"), *Name, WorldStorageProvider->GetDatabaseFormat(),
+		       compatible? TEXT("Version is compatible.") : TEXT("Version is NOT compatible! Cannot load data."));
 		ensure(compatible);
 
 		TArray<uint8> propertiesBytes;
-		if(WorldStorageProvider->GetGlobalData("WorldProperties", propertiesBytes)){
-			FMemoryReader reader(propertiesBytes,true);
+		if (WorldStorageProvider->GetGlobalData("WorldProperties", propertiesBytes)) {
+			FMemoryReader reader(propertiesBytes, true);
 
 			reader << WorldSeed;
 
 			reader.Flush();
 			reader.Close();
 		}
-		
+
 		// this might not be the best place for this but
 		TArray<uint8> PIDbytes;
-		if(WorldStorageProvider->GetGlobalData("NextPersistentActorID", PIDbytes)){
-			
-			FMemoryReader reader(PIDbytes,true);
+		if (WorldStorageProvider->GetGlobalData("NextPersistentActorID", PIDbytes)) {
+			FMemoryReader reader(PIDbytes, true);
 
 			reader << NextPersistentActorID;
 
 			reader.Flush();
 			reader.Close();
 
-			if(NextPersistentActorID <= 0) NextPersistentActorID = 1;
+			if (NextPersistentActorID <= 0)
+				NextPersistentActorID = 1;
 		}
 	}
 }
 
 void APagedWorld::PostInitializeComponents() {
 	Super::PostInitializeComponents();
-	
+
 	UEPolyvoxLogger* myCustomLogger = new UEPolyvoxLogger();
 	PolyVox::setLoggerInstance(myCustomLogger);
-	
+
 	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), VolumeTargetMemoryMB * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this)));
@@ -378,7 +411,7 @@ void APagedWorld::BeginDestroy() {
 void APagedWorld::SaveAndShutdown() {
 	if (bHasShutdown || !bHasStarted)
 		return;
-	
+
 	bHasShutdown = true;
 	VoxelWorldThreadPool->Destroy();
 
@@ -417,9 +450,9 @@ void APagedWorld::SaveAndShutdown() {
 
 		writer.Flush();
 		writer.Close();
-		
+
 		WorldStorageProvider->PutGlobalData("WorldProperties", worldProperties);
-		
+
 		UE_LOG(LogVoxelDatabase, Warning, TEXT("Saving data for regions..."));
 		UnloadRegionsExcept(TSet<FIntVector>()); // force save all entities
 		UE_LOG(LogVoxelDatabase, Warning, TEXT("Regional data saved."));
@@ -444,9 +477,7 @@ void APagedWorld::SaveAndShutdown() {
 
 void APagedWorld::RegisterPagingComponent(UTerrainPagingComponent* pagingComponent) { pagingComponents.AddUnique(pagingComponent); }
 
-void APagedWorld::ResendRegion(const FIntVector& region) {
-	PacketsToSendOrResendToSubscribersNextExtraction.Emplace(region);
-}
+void APagedWorld::ResendRegion(const FIntVector& region) { PacketsToSendOrResendToSubscribersNextExtraction.Emplace(region); }
 
 void APagedWorld::OnFatalError() {
 }
@@ -502,24 +533,18 @@ bool APagedWorld::isRegionEmptyServer(const FIntVector& pos) {
 
 
 int32 APagedWorld::GetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY) {
-	auto Key = FIntVector(RegionX,RegionY,0);
-	if(HighestGeneratedRegion.Contains(Key)) {
-		return  *HighestGeneratedRegion.Find(Key);
-	} else {
-		return -1;
-	}
+	auto Key = FIntVector(RegionX, RegionY, 0);
+	if (HighestGeneratedRegion.Contains(Key)) { return *HighestGeneratedRegion.Find(Key); }
+	else { return -1; }
 }
 
 void APagedWorld::SetHighestGeneratedRegionAt(int32 RegionX, int32 RegionY, int32 RegionZ) {
-	auto Key = FIntVector(RegionX,RegionY,0);
-	if(HighestGeneratedRegion.Contains(Key)) {
+	auto Key = FIntVector(RegionX, RegionY, 0);
+	if (HighestGeneratedRegion.Contains(Key)) {
 		int32 CurrentHighest = *HighestGeneratedRegion.Find(Key);
-		if(RegionZ > CurrentHighest) {
-			HighestGeneratedRegion.Emplace(Key, RegionZ);
-		}
-	} else {
-		HighestGeneratedRegion.Emplace(Key, RegionZ);
+		if (RegionZ > CurrentHighest) { HighestGeneratedRegion.Emplace(Key, RegionZ); }
 	}
+	else { HighestGeneratedRegion.Emplace(Key, RegionZ); }
 }
 
 void APagedWorld::QueueRegionRender(const FIntVector& pos) {
@@ -548,7 +573,7 @@ void APagedWorld::PrefetchRegionsInRadius(const FIntVector& pos, int32 radius) c
 
 
 bool APagedWorld::isRegionEmptyLocal(const FIntVector& pos) {
-		if (regions.Contains(pos)) {
+	if (regions.Contains(pos)) {
 		auto region = *regions.Find(pos);
 		return region->bEmptyLocally;
 	}
@@ -564,6 +589,13 @@ FIntVector APagedWorld::WorldToVoxelCoords(const FVector& WorldCoords) { return 
 
 FVector APagedWorld::VoxelToWorldCoords(const FIntVector& VoxelCoords) { return FVector(VoxelCoords * VOXEL_SIZE); }
 
+FIntVector APagedWorld::VoxelToLocalVoxelCoords(const FIntVector& VoxelCoords) {
+	return VoxelCoords - VoxelToRegionCoords(VoxelCoords);
+	//return FIntVector(VoxelCoords.X % REGION_SIZE,VoxelCoords.Y % REGION_SIZE,VoxelCoords.Z % REGION_SIZE); // remainder not modulus, cant use
+}
+
+FIntVector APagedWorld::LocalVoxelToVoxelCoords(const FIntVector& LocalVoxelCoords, const FIntVector& RegionCoords) { return LocalVoxelCoords + RegionCoords; }
+
 /*bool APagedWorld::Server_ModifyVoxel_Validate(FIntVector VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
 	//cause is valid and cause is less than x away , maybe make one without radius because thats usually server side 
 	return true;
@@ -574,7 +606,7 @@ void APagedWorld::Server_ModifyVoxel_Implementation(FIntVector VoxelLocation, ui
 }*/
 
 void APagedWorld::Multi_ModifyVoxel_Implementation(const FIntVector& VoxelLocation, uint8 Radius, uint8 Material, uint8 Density, AActor* cause, bool bIsSpherical, bool bShouldDrop) {
-	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation,Radius, Material, Density, bShouldDrop, bIsSpherical, true, cause));
+	voxelUpdateQueue.Enqueue(FVoxelUpdate(VoxelLocation, Radius, Material, Density, bShouldDrop, bIsSpherical, true, cause));
 }
 
 void APagedWorld::BeginWorldGeneration(const FIntVector& RegionCoords) {
@@ -582,12 +614,13 @@ void APagedWorld::BeginWorldGeneration(const FIntVector& RegionCoords) {
 		remainingRegionsToGenerate++;
 
 		//UE_LOG(LogVoxelWorld, Warning, TEXT("Starting worldgen for region [%s]."), *RegionCoords.ToString());
-		
+
 		(new FAutoDeleteAsyncTask<WorldGenThreads::RegionGenerationTask>(this, RegionCoords))->StartBackgroundTask(VoxelWorldThreadPool);
 	}
 }
 
-int32 APagedWorld::GetRegionSeed(const FIntVector& RegionCoords) { // inspired by minecraft
+int32 APagedWorld::GetRegionSeed(const FIntVector& RegionCoords) {
+	// inspired by minecraft
 	return (RegionCoords.X * RegionSeedRandomX + RegionCoords.Y * RegionSeedRandomY + RegionCoords.Z * RegionSeedRandomZ) ^ WorldSeed;
 }
 
@@ -620,36 +653,39 @@ void APagedWorld::ForceSaveWorld() {
 
 void APagedWorld::PreSaveWorld() {
 	OnPreSaveWorld();
-	if(PreSaveWorld_Event.IsBound()) PreSaveWorld_Event.Broadcast(false);
+	if (PreSaveWorld_Event.IsBound())
+		PreSaveWorld_Event.Broadcast(false);
 
 	//todo move somewhere else  // todo write loading
 	TArray<uint8> data;
-	FMemoryWriter writer(data,true);
+	FMemoryWriter writer(data, true);
 
 	writer << NextPersistentActorID;
 
 	writer.Flush();
 	writer.Close();
-	
+
 	WorldStorageProvider->PutGlobalData("NextPersistentActorID", data);
 }
 
 void APagedWorld::PostSaveWorld() {
-		OnPostSaveWorld();
-	if(PostSaveWorld_Event.IsBound()) PostSaveWorld_Event.Broadcast(false);
+	OnPostSaveWorld();
+	if (PostSaveWorld_Event.IsBound())
+		PostSaveWorld_Event.Broadcast(false);
 }
 
 void APagedWorld::SaveGlobalString(FString Key, FString Value) {
-	if(WorldStorageProvider)
-	WorldStorageProvider->PutGlobalString( std::string(TCHAR_TO_UTF8(*Key)), std::string(TCHAR_TO_UTF8(*Value)));
+	if (WorldStorageProvider)
+		WorldStorageProvider->PutGlobalString(std::string(TCHAR_TO_UTF8(*Key)), std::string(TCHAR_TO_UTF8(*Value)));
 }
 
 bool APagedWorld::LoadGlobalString(FString Key, FString& Value) {
-	if(!WorldStorageProvider) return false;
-	
+	if (!WorldStorageProvider)
+		return false;
+
 	std::string Str;
 	bool retval = WorldStorageProvider->GetGlobalString(std::string(TCHAR_TO_UTF8(*Key)), Str);
-	if(retval)
+	if (retval)
 		Value = UTF8_TO_TCHAR(Str.c_str());
 	return retval;
 }
@@ -674,12 +710,9 @@ void APagedWorld::SaveAllDataForRegions(TSet<FIntVector> Regions) {
 				record.ActorTransform = Transform;
 
 				auto FindKey = LivePersistentActors.FindKey(elem);
-				if(FindKey) {
-					record.PersistentActorID = *FindKey;
-				} else {
-					record.PersistentActorID = 0;
-				}
-				
+				if (FindKey) { record.PersistentActorID = *FindKey; }
+				else { record.PersistentActorID = 0; }
+
 				//////////////////////////////////
 				// save components
 
@@ -771,11 +804,11 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 						FVoxelWorldSaveGameArchive Ar(MemoryReader);
 						NewActor->Serialize(Ar);
 
-						if(record.PersistentActorID != 0) {
+						if (record.PersistentActorID != 0) {
 							RegisterExistingPersistentActor(NewActor, record.PersistentActorID);
 							//UE_LOG(LogTemp, Warning, TEXT("Loaded persistent actor id %d"), (int32)record.PersistentActorID);
 						}
-						
+
 						UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
 
 						////
@@ -798,9 +831,9 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 							TArray<UActorComponent*> outComps;
 							NewActor->GetComponents(compClass, outComps); // get components of the class we are loading
 
-							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Trying to resolve component record %s on actor %s"), *compRecord.ComponentClass , *NewActor->GetHumanReadableName());
-							
-							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d  %s components on actor %s"), outComps.Num(),*compRecord.ComponentClass , *NewActor->GetHumanReadableName());
+							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Trying to resolve component record %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
+
+							UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] There are %d  %s components on actor %s"), outComps.Num(), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
 
 							UActorComponent* currentComp = nullptr;
 
@@ -811,16 +844,15 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 									processedComps.Add(elem);
 									UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Found this comp %s"), *elem->GetReadableName());
 									break;
-								} else {
-									UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Already seen this comp %s"), *elem->GetReadableName());
 								}
+								else { UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Already seen this comp %s"), *elem->GetReadableName()); }
 							}
-							
+
 							if (!currentComp) {
 								UE_LOG(LogVoxelDatabase, Warning, TEXT("[db] Failed to find component %s on actor %s"), *compRecord.ComponentClass, *NewActor->GetHumanReadableName());
 								if (compRecord.bSpawnIfNotFound) {
 									// spawn it
-									check(false);//not implemented
+									check(false); //not implemented
 								}
 								else { continue; }
 							}
@@ -844,7 +876,8 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 
 						////
 						IISavableWithRegion::Execute_OnLoaded(NewActor);
-						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(), region_actors.Num(), *BytesToHex(region_actors.GetData(),region_actors.Num()));
+						UE_LOG(LogVoxelDatabase, Verbose, TEXT("[db] Loaded region %s  %d B data %s."), *load.ToString(), region_actors.Num(),
+						       *BytesToHex(region_actors.GetData(),region_actors.Num()));
 					}
 					else {
 						UE_LOG(LogVoxelDatabase, Error, TEXT("[db] ERROR LOADING Class %s from region saved actors! Failed to spawn at %s!"), *record.ActorClass,
@@ -859,7 +892,7 @@ void APagedWorld::LoadAllDataForRegions(TSet<FIntVector> Regions) {
 void APagedWorld::SavePlayerActor(FString Identifier, AActor* ActorToSerialize) {
 	if (ActorToSerialize && IsValid(ActorToSerialize)) {
 		///////////////////////////////////////////////////////////
-			   ///
+					  ///
 		const FTransform Transform = ActorToSerialize->GetActorTransform();
 		//const FIntVector saveRegion = VoxelToRegionCoords(WorldToVoxelCoords(Transform.GetLocation()));
 
@@ -950,10 +983,8 @@ bool APagedWorld::LoadPlayerActor(FString Identifier, AActor* ExistingActor, boo
 				ExistingActor->Serialize(Ar);
 
 				OutTransform = record.ActorTransform;
-				
-				if(bSetTransform) {
-					ExistingActor->SetActorTransform(record.ActorTransform);
-				}
+
+				if (bSetTransform) { ExistingActor->SetActorTransform(record.ActorTransform); }
 				//UGameplayStatics::FinishSpawningActor(NewActor, record.ActorTransform);
 				////
 				//////////////////
@@ -1129,10 +1160,10 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 AActor* APagedWorld::GetPersistentActor(int64 ID) {
 	auto actor = LivePersistentActors.Find(ID);
 
-	if(actor && IsValid(*actor)) {
+	if (actor && IsValid(*actor)) {
 		auto Actor = *actor;
-		if(!Actor->IsPendingKill())
-		return Actor;
+		if (!Actor->IsPendingKill())
+			return Actor;
 	}
 	return nullptr;
 }
@@ -1144,24 +1175,18 @@ int64 APagedWorld::RegisterNewPersistentActor(AActor* Actor) {
 }
 
 int64 APagedWorld::LookupPersistentActorID(AActor* Actor) {
-	if(LivePersistentActors.Num() <= 0) return 0;
-	
-	auto Key = LivePersistentActors.FindKey(Actor);
-	if(Key) {
-		return *Key;
-	} else {
+	if (LivePersistentActors.Num() <= 0)
 		return 0;
-	}
+
+	auto Key = LivePersistentActors.FindKey(Actor);
+	if (Key) { return *Key; }
+	else { return 0; }
 
 }
 
-void APagedWorld::RegisterExistingPersistentActor(AActor* Actor, int64 ID) {
-	LivePersistentActors.Add(ID, Actor);
-}
+void APagedWorld::RegisterExistingPersistentActor(AActor* Actor, int64 ID) { LivePersistentActors.Add(ID, Actor); }
 
-void APagedWorld::UnregisterPersistentActor(int64 ID) {
-	LivePersistentActors.Remove(ID);
-}
+void APagedWorld::UnregisterPersistentActor(int64 ID) { LivePersistentActors.Remove(ID); }
 
 bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComponent*& pager, TArray<TArray<uint8>> packets) {
 	if (packets.Num() > 0) {
@@ -1189,7 +1214,7 @@ bool APagedWorld::VoxelNetServer_SendPacketsToPagingComponent(UTerrainPagingComp
 }
 
 void APagedWorld::PagingComponentTick() {
-	if (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer) 
+	if (!bIsVoxelNetServer && !bIsVoxelNetSingleplayer)
 		return;
 
 	TSet<FIntVector> regionsToLoad;
@@ -1216,11 +1241,11 @@ void APagedWorld::PagingComponentTick() {
 
 			if (bIsVoxelNetServer) {
 				/*auto toUpload = pager->subscribedRegions.Difference(previousSubscribedRegions); // to load
-															
-																			// since the vast majority of packets are delayed maybe we should just delay all of them to simplify
-																			for (auto& uploadRegion : toUpload) {
-																					pager->waitingForPackets.Add(uploadRegion);
-																			}*/
+																		   
+																						   // since the vast majority of packets are delayed maybe we should just delay all of them to simplify
+																						   for (auto& uploadRegion : toUpload) {
+																								   pager->waitingForPackets.Add(uploadRegion);
+																						   }*/
 
 				pager->waitingForPackets.Append(pager->subscribedRegions.Difference(previousSubscribedRegions));
 			}
@@ -1246,9 +1271,7 @@ void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
 	SaveAllDataForRegions(toUnload);
 	LoadAllDataForRegions(toLoad);
 
-	for (auto& unload : toUnload) {
-		regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1);
-	}
+	for (auto& unload : toUnload) { regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1); }
 
 	for (auto& load : toLoad) {
 		if (!regions.Contains(load)) {
@@ -1275,9 +1298,10 @@ void APagedWorld::RegisterPlayerWithCookie(APlayerController* player, int64 cook
 }
 
 void APagedWorld::DisconnectPlayerFromVoxelNet(APlayerController* player) {
-	if(VoxelNetServer_PlayerVoxelServers.Contains(player)) {
+	if (VoxelNetServer_PlayerVoxelServers.Contains(player)) {
 		auto ServerForClient = VoxelNetServer_PlayerVoxelServers.FindAndRemoveChecked(player);
-		if(ServerForClient.IsValid()) ServerForClient.Get()->Stop();
+		if (ServerForClient.IsValid())
+			ServerForClient.Get()->Stop();
 	}
 }
 
@@ -1390,7 +1414,7 @@ bool APagedWorld::VoxelNetClient_ConnectToServer(FString Host, int32 Port) {
 }
 
 bool APagedWorld::VoxelNetClient_DisconnectFromServer() {
-	if(VoxelNetClient_VoxelClient.IsValid()) {
+	if (VoxelNetClient_VoxelClient.IsValid()) {
 		VoxelNetClient_VoxelClient.Get()->Stop();
 		return true;
 	}
@@ -1399,9 +1423,7 @@ bool APagedWorld::VoxelNetClient_DisconnectFromServer() {
 
 int32 APagedWorld::VoxelNetClient_GetPendingRegionDownloads() const {
 	// todo this is not thread safe
-	if(VoxelNetClient_VoxelClient.IsValid()){
-		return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload;
-	}
+	if (VoxelNetClient_VoxelClient.IsValid()) { return VoxelNetClient_VoxelClient.Get()->remainingRegionsToDownload; }
 	return -1;
 }
 
@@ -1410,4 +1432,3 @@ void APagedWorld::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 
 	DOREPLIFETIME(APagedWorld, WorldSeed);
 }
-

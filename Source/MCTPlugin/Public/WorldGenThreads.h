@@ -45,7 +45,7 @@ namespace WorldGenThreads {
 							return; // this happens if the game quits during worldgen
 						}
 
-						auto Voxel = WorldGen::Interpret_Island(x + lower.X, y + lower.Y, z + lower.Z, noise);
+						auto Voxel = WorldGen::Interpret_Island2(x + lower.X, y + lower.Y, z + lower.Z, noise);
 						output.voxel[x][y][z] = Voxel;
 
 						if(/*Voxel.getDensity() > 0 || */Voxel.getMaterial() > 0) output.bIsEmpty = false;
