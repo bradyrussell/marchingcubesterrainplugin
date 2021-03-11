@@ -38,6 +38,8 @@ namespace ExtractionThreads {
 				world->VolumeMutex.Unlock();
 				return;
 			}
+
+			bool tempDebug_PacketWasEmpty = true;
 				
 			if (world->bIsVoxelNetServer) {
 				/*
@@ -77,9 +79,12 @@ namespace ExtractionThreads {
 				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
+
+				tempDebug_PacketWasEmpty = packetOutput.bIsEmpty;
 			}
 			// end packet generation
-				
+
+								
 			auto ExtractedMesh = extractMarchingCubesMesh(world->VoxelVolume.Get(), ToExtract);
 			world->VolumeMutex.Unlock();
 
@@ -89,6 +94,20 @@ namespace ExtractionThreads {
 
 			//FVector OffsetLocation = FVector(0,0,0);//FVector(lower);
 
+				
+			/*
+			 * 3/7/21  are there situations where all voxels are empty but there is still a mesh ? 
+			 *	if not we can just check the packet on the server for bIsEmpty to skip the volume reads
+			 */
+			if(world->bIsVoxelNetServer) {
+				// if this asserts false then the above optimization is not valid
+				if(!(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0))) {
+					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask packet empty != indices empty: %d vs %d"), tempDebug_PacketWasEmpty, decoded.getNoOfIndices())
+				}
+				assert(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0));
+			}
+			//////////////////////////////////
+				
 			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
 				output.bIsEmpty = true;
 				world->extractionQueue.Enqueue(output);

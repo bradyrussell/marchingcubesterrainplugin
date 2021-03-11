@@ -275,8 +275,8 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 
 						TArray<TSharedPtr<FJsonValue>> ActorPropertiesObjects;
 						
-						for (TFieldIterator<UProperty> PropsIterator(recordClass); PropsIterator; ++PropsIterator) {
-							UProperty* Property = *PropsIterator;
+						for (TFieldIterator<FProperty> PropsIterator(recordClass); PropsIterator; ++PropsIterator) {
+							FProperty* Property = *PropsIterator;
 
 							if((Property->GetPropertyFlags() & EPropertyFlags::CPF_SaveGame) != 0){
 
@@ -285,7 +285,7 @@ int32 UExportWorldCommandlet::Main(const FString& Params) {
 								CurrentPropertyObject->SetStringField("name",Property->GetName());
 								CurrentPropertyObject->SetNumberField("size", Property->GetSize());
 								CurrentPropertyObject->SetStringField("type",Property->GetCPPType());
-								CurrentPropertyObject->SetStringField("desc",Property->GetDesc());
+								//CurrentPropertyObject->SetStringField("desc",Property->GetDesc());
 
 								ActorPropertiesObjects.Add(MakeShareable(new FJsonValueObject(CurrentPropertyObject)));
 							}

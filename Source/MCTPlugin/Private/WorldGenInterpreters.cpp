@@ -149,6 +149,91 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 
 }
 
 
+/*
+ *	Index	|	Function
+ *	0		|	Island Height
+ *	1		|	Island Depth
+ *	2		|	Material
+ */
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Island2(int32 x, int32 y, int32 z,const TArray<UUFNNoiseGenerator*>& noise) {
+	if (noise.Num() < 2) {
+		UE_LOG(LogTemp, Warning, TEXT("Aborting region generation, cannot access noise."))
+		return PolyVox::MaterialDensityPair88();
+	}
+
+	auto Height = noise[0]->GetNoise2D(x,y);
+
+	if(z >= Height) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+	
+	auto Depth = noise[1]->GetNoise2D(x,y);
+
+	if(z <= -Depth) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+
+	auto Material = FMath::RoundToInt(noise[2]->GetNoise3D(x,y,z));
+
+	/*if (z > _height)*/ return PolyVox::MaterialDensityPair88(Material, 255);
+
+	/*else {
+		//auto _material = noise[1]->GetNoise3D(x, y, z);
+
+		auto _temperature = noise[2]->GetNoise2D(x, y); // assumed to be -1 thru 1
+		//auto _moisture = noise[3]->GetNoise2D(x, y); // assumed to be -1 thru 1
+
+		auto _biome = Interpret_Biome(_height,_temperature,1);
+
+		auto _caves = noise[4]->GetNoise3D(x, y, z);
+		auto _ore = noise[5]->GetNoise3D(x, y, z);
+
+		switch (_biome) { 
+
+			case MOUNTAINS: return Interpret_Biome_Mountains(z, _height, _caves, _ore, _density);
+			default: return PolyVox::MaterialDensityPair88(0,0);
+		}
+	}*/
+
+}
+
+/*
+ *	Index	|	Function
+ *	0		|	Voxel Density
+ *	1		|	Voxel Material
+ *	2		|	Island Presence
+ */
+PolyVox::MaterialDensityPair88 WorldGen::Interpret_Island(int32 x, int32 y, int32 z,const TArray<UUFNNoiseGenerator*>& noise) {
+	if (noise.Num() < 2) {
+		UE_LOG(LogTemp, Warning, TEXT("Aborting region generation, cannot access noise."))
+		return PolyVox::MaterialDensityPair88();
+	}
+
+	//if(z < -1000000.f || z >1000000.f) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+	// .4 is best so far
+	if(noise[2]->GetNoise3D(x,y,z) < 0.3f) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+	
+	int32 density = ((noise[0]->GetNoise3D(x,y,z) + 1) * 128) - 1;
+	int32 material = FMath::RoundToInt(noise[1]->GetNoise3D(x,y,z));
+
+	/*if (z > _height)*/ return PolyVox::MaterialDensityPair88(material, density);
+
+	/*else {
+		//auto _material = noise[1]->GetNoise3D(x, y, z);
+
+		auto _temperature = noise[2]->GetNoise2D(x, y); // assumed to be -1 thru 1
+		//auto _moisture = noise[3]->GetNoise2D(x, y); // assumed to be -1 thru 1
+
+		auto _biome = Interpret_Biome(_height,_temperature,1);
+
+		auto _caves = noise[4]->GetNoise3D(x, y, z);
+		auto _ore = noise[5]->GetNoise3D(x, y, z);
+
+		switch (_biome) { 
+
+			case MOUNTAINS: return Interpret_Biome_Mountains(z, _height, _caves, _ore, _density);
+			default: return PolyVox::MaterialDensityPair88(0,0);
+		}
+	}*/
+
+}
+
 EBiome WorldGen::Interpret_Biome(float _height, float temperatue, float moisture) {
 	//if(_height > 64) return MOUNTAINS;
 	//if(_height > 0) return PLAINS;
