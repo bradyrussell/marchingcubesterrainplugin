@@ -2,6 +2,8 @@
 
 An Unreal Engine plugin that utilizes [Polyvox](http://www.volumesoffun.com/polyvox-about/) & [LevelDB](https://github.com/google/leveldb) and depends on the [UnrealFastNoise](https://github.com/midgen/UnrealFastNoise) & [RuntimeMeshComponent](https://github.com/Koderz/RuntimeMeshComponent) plugins.
 
+The master branch of this repo is currently targeting UE 4.26.1.
+
 # Purpose
 
 This plugin allows for multiplayer runtime editable procedural voxel terrain in UE4, which can be rendered using Marching Cubes or Cubic meshes.
