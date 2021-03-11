@@ -57,16 +57,16 @@ struct FExtractionTaskOutput // results of surface extraction and decoding, to b
 {
 	GENERATED_BODY()
 	bool bIsEmpty = false;
-	FIntVector region;
-	TArray<FExtractionTaskSection> section = TArray<FExtractionTaskSection>();
+	FIntVector Region;
+	TArray<FExtractionTaskSection> Section = TArray<FExtractionTaskSection>();
 };
 
 USTRUCT(BlueprintType)
 struct FPacketTaskOutput // compressed packet information for a region
 {
 	GENERATED_BODY()
-	FIntVector region;
-	TArray<uint8> packet;
+	FIntVector Region;
+	TArray<uint8> Packet;
 	bool bIsEmpty;
 };
 
@@ -87,24 +87,24 @@ struct FVoxelUpdate // a change of a group of voxels from any type to a single n
 
 
 	FVoxelUpdate(const FIntVector& Origin, uint8 Radius, uint8 Material, uint8 Density, bool bShouldDrop, bool bIsSpherical, bool bShouldCallEvent, AActor* CauseActor)
-		: origin(Origin),
-		  radius(Radius),
-		  material(Material),
-		  density(Density),
+		: Origin(Origin),
+		  Radius(Radius),
+		  Material(Material),
+		  Density(Density),
 		  bShouldDrop(bShouldDrop),
 		  bIsSpherical(bIsSpherical),
 		  bShouldCallEvent(bShouldCallEvent),
-		  causeActor(CauseActor) {
+		  CauseActor(CauseActor) {
 	}
 
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	FIntVector origin;
+	FIntVector Origin;
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	uint8 radius;
+	uint8 Radius;
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	uint8 material;
+	uint8 Material;
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	uint8 density;
+	uint8 Density;
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
 	bool bShouldDrop;
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
@@ -112,7 +112,7 @@ struct FVoxelUpdate // a change of a group of voxels from any type to a single n
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
 	bool bShouldCallEvent;
 	UPROPERTY(BlueprintReadWrite, Category = "Voxel Update")
-	AActor* causeActor = nullptr;
+	AActor* CauseActor = nullptr;
 };
 
 //FVoxelExplosion(TMap<uint8,float> MaterialExplosionResistances ??)
@@ -124,7 +124,7 @@ struct FWorldGenerationTaskOutput //
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadWrite, Category = "WorldGen Task")
-	FIntVector pos;
+	FIntVector Pos;
 	PolyVox::MaterialDensityPair88 voxel[REGION_SIZE][REGION_SIZE][REGION_SIZE];
 
 	// is it entirely zeroed?
@@ -137,7 +137,7 @@ struct FPendingHandshake //
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadWrite, Category = "Handshake")
-	int64 cookie = 0;
+	int64 Cookie = 0;
 	TSharedPtr<VoxelNetThreads::VoxelNetServer> server;
 };
 

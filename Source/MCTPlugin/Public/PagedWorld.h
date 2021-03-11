@@ -112,7 +112,9 @@ public:
 	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */
-	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly) int32 VolumeTargetMemoryMB = 512;
+	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) void CreateVolume(int32 MemoryTargetMB);
+	UPROPERTY(Category = "Voxel World|Volume Memory",BlueprintReadWrite, EditDefaultsOnly) int32 VolumeTargetMemoryMB = 64;
+	UPROPERTY(Category = "Voxel World|Volume Memory",BlueprintReadWrite, EditDefaultsOnly) int32 ClientVolumeTargetMemoryMB = 64;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) void Flush() const;
 
@@ -223,6 +225,13 @@ public:
 	UFUNCTION(Category = "Voxel World|Networking|Client", BlueprintCallable)int32 VoxelNetClient_GetPendingRegionDownloads() const;
 	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
 	FRunnableThread* VoxelNetClient_ClientThread;
+
+	FCriticalSection DEBUG_pagedRegionsLock;
+	TSet<FIntVector> DEBUG_pagedRegions;
+	int32 DEBUG_pagedRegionsCounter; // curious as to whether this will be different
+	
+	UFUNCTION(Category = "Voxel World|DEBUG", BlueprintCallable)int32 DEBUG_GetPagedRegionCount();
+	UFUNCTION(Category = "Voxel World|DEBUG", BlueprintCallable)int32 DEBUG_GetPagedRegionCounter();
 };
 
 class WorldPager : public PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Pager {

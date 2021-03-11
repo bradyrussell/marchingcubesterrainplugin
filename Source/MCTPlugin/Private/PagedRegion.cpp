@@ -63,19 +63,19 @@ void APagedRegion::RenderParsed(const FExtractionTaskOutput& output) {
 
 	// for each LOD level in output
 	//if(!output.bIsEmpty){   // this is making it so the last mesh of a region cant be cleared. i dont see any harm in iterating on air regions
-		for (int32 Material = 0; Material < output.section.Num(); Material++) {
-			if (output.section[Material].Indices.Num() > 0) {
+		for (int32 Material = 0; Material < output.Section.Num(); Material++) {
+			if (output.Section[Material].Indices.Num() > 0) {
 				if (!bSectionExists[Material]) {
-					StaticProvider->CreateSectionFromComponents(0, Material, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
-					                                            output.section[Material].UV0,
-					                                            output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
+					StaticProvider->CreateSectionFromComponents(0, Material, Material, output.Section[Material].Vertices, output.Section[Material].Indices, output.Section[Material].Normals,
+					                                            output.Section[Material].UV0,
+					                                            output.Section[Material].Colors, output.Section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
 
 					bSectionExists[Material] = true;
 				}
 				else {
-					StaticProvider->UpdateSectionFromComponents(0, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
-					                                            output.section[Material].UV0,
-					                                            output.section[Material].Colors, output.section[Material].Tangents);
+					StaticProvider->UpdateSectionFromComponents(0, Material, output.Section[Material].Vertices, output.Section[Material].Indices, output.Section[Material].Normals,
+					                                            output.Section[Material].UV0,
+					                                            output.Section[Material].Colors, output.Section[Material].Tangents);
 
 				//	StaticProvider->MarkCollisionDirty(); // does it matter that i call this numerous time? i assume not because they are all in succession
 						// if it does I can change it to a function scope bNeedsMarkedDirty since it applies for the whole provider not just the section
