@@ -24,6 +24,8 @@ DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STAT
 DECLARE_CYCLE_STAT(TEXT("World Do Voxel Updates"), STAT_WorldVoxelUpdates, STATGROUP_VoxelWorld);
 DECLARE_CYCLE_STAT(TEXT("World Process Dirty Regions"), STAT_WorldDirtyRegions, STATGROUP_VoxelWorld);
 DECLARE_CYCLE_STAT(TEXT("World Clear Extraction Queue"), STAT_WorldClearExtractionQueue, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Database Region Reads"), STAT_WorldDatabaseReads, STATGROUP_VoxelWorld);
+DECLARE_CYCLE_STAT(TEXT("World Database Region Writes"), STAT_WorldDatabaseWrites, STATGROUP_VoxelWorld);
 #endif
 
 APagedWorld::APagedWorld() {
@@ -1326,36 +1328,51 @@ WorldPager::WorldPager(APagedWorld* World)
 
 void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
+		#ifdef WORLD_TICK_TRACKING
+		{
+		SCOPE_CYCLE_COUNTER(STAT_WorldDatabaseReads);
+		#endif
+		
 		const auto pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
-				world->DEBUG_pagedRegionsLock.Lock();
+		world->DEBUG_pagedRegionsLock.Lock();
 		world->DEBUG_pagedRegions.Add(pos);
 		world->DEBUG_pagedRegionsCounter++;
 		world->DEBUG_pagedRegionsLock.Unlock();
 		
 		const auto bRegionExists = world->WorldStorageProvider->GetRegion(pos, pChunk);
 		if (!bRegionExists) { world->BeginWorldGeneration(pos); }
+		#ifdef WORLD_TICK_TRACKING
+		}
+		#endif
 	}
 }
 
 void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	// sometimes but not always this occurs outside Game thread, world storage provider should be ok with that
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
-		const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
+		#ifdef WORLD_TICK_TRACKING
+		{
+		SCOPE_CYCLE_COUNTER(STAT_WorldDatabaseWrites);
+		#endif
+			const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
-				world->DEBUG_pagedRegionsLock.Lock();
-		world->DEBUG_pagedRegions.Remove(pos);
-		world->DEBUG_pagedRegionsCounter--;
-		world->DEBUG_pagedRegionsLock.Unlock();
-		// get savablewithregion actors in this region
-		// AsyncTask(ENamedThreads::GameThread, [this, pos]() { // for now this will have to do
-		// 	
-		// });
+			world->DEBUG_pagedRegionsLock.Lock();
+			world->DEBUG_pagedRegions.Remove(pos);
+			world->DEBUG_pagedRegionsCounter--;
+			world->DEBUG_pagedRegionsLock.Unlock();
+			// get savablewithregion actors in this region
+			// AsyncTask(ENamedThreads::GameThread, [this, pos]() { // for now this will have to do
+			// 	
+			// });
 
-#ifndef DONT_SAVE
-		world->WorldStorageProvider->PutRegion(pos, pChunk);
-#endif
-		//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
+			#ifndef DONT_SAVE
+			world->WorldStorageProvider->PutRegion(pos, pChunk);
+			#endif
+			//UE_LOG(LogTemp, Warning, TEXT("[db] Saved region to db:  %s."), *pos.ToString());
+		#ifdef WORLD_TICK_TRACKING
+		}
+		#endif
 	}
 }
 

@@ -49,27 +49,29 @@ public:
 	virtual FIntVector4 DeserializeLocationFromString(std::string Key);
 	// returns true if the key matches SerializeLocationToString
 	virtual bool IsRegionKey(std::string Key);
+
+	// making everything virtual to allow overriding for better control
 	
-	bool PutBytes(std::string Key, TArray<uint8>& Bytes);
-	bool GetBytes(std::string Key, TArray<uint8>& Bytes);
+	virtual bool PutBytes(std::string Key, TArray<uint8>& Bytes);
+	virtual bool GetBytes(std::string Key, TArray<uint8>& Bytes);
 
-	bool PutRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData);
-	bool GetRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData);
+	virtual bool PutRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData);
+	virtual bool GetRegion(FIntVector Region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* RegionData);
 
-	bool PutRegionBinary(FIntVector Region, TArray<uint8>& Bytes);
-	bool GetRegionBinary(FIntVector Region, TArray<uint8>& Bytes);
+	virtual bool PutRegionBinary(FIntVector Region, TArray<uint8>& Bytes);
+	virtual bool GetRegionBinary(FIntVector Region, TArray<uint8>& Bytes);
 	
-	bool PutRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes);
-	bool GetRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes);
+	virtual bool PutRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes);
+	virtual bool GetRegionalData(FIntVector Region, uint8 Index, TArray<uint8>& Bytes);
 
-	bool PutGlobalData(std::string Key, TArray<uint8>& Bytes);
-	bool GetGlobalData(std::string Key, TArray<uint8>& Bytes);
+	virtual bool PutGlobalData(std::string Key, TArray<uint8>& Bytes);
+	virtual bool GetGlobalData(std::string Key, TArray<uint8>& Bytes);
 
-	bool PutGlobalString(std::string Key, std::string String);
-	bool GetGlobalString(std::string Key, std::string& String);
+	virtual bool PutGlobalString(std::string Key, std::string String);
+	virtual bool GetGlobalString(std::string Key, std::string& String);
 	
-	int GetDatabaseFormat();
-	bool SetDatabaseFormat(int Format);
+	virtual int GetDatabaseFormat();
+	virtual bool SetDatabaseFormat(int Format);
 
 	// Optionally allowed to override because some StorageProviders dont store a version , see StorageProviderNull
 	virtual bool VerifyDatabaseFormat(int Format);

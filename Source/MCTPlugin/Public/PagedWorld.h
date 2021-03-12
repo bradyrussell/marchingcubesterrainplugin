@@ -224,7 +224,7 @@ public:
 	TSharedPtr<VoxelNetThreads::VoxelNetClient> VoxelNetClient_VoxelClient;
 	FRunnableThread* VoxelNetClient_ClientThread;
 
-		FCriticalSection DEBUG_pagedRegionsLock;
+	FCriticalSection DEBUG_pagedRegionsLock;
 	TSet<FIntVector> DEBUG_pagedRegions;
 	int32 DEBUG_pagedRegionsCounter; // curious as to whether this will be different
 
