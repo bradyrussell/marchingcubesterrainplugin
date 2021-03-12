@@ -23,8 +23,8 @@ namespace ExtractionThreads {
 			
 			try{
 			FExtractionTaskOutput output;
-			output.Section.AddDefaulted(world->TerrainMaterials.Num());
-			output.Region = lower;
+			output.section.AddDefaulted(world->TerrainMaterials.Num());
+			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE, lower.Y + REGION_SIZE,
@@ -75,12 +75,12 @@ namespace ExtractionThreads {
 				FBufferArchive packetArchive(true);
 				Packet::MakeRegionContents(packetArchive, packet);
 
-				packetOutput.Region = lower;
-				packetOutput.Packet = packetArchive; // can i avoid the copy here
+				packetOutput.region = lower;
+				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 
-				tempDebug_PacketWasEmpty = packetOutput.bIsEmpty;
+				tempDebug_PacketWasEmpty = packetOutput.bIsEmpty; // why is this inverted??
 			}
 			// end packet generation
 
@@ -109,8 +109,6 @@ namespace ExtractionThreads {
 				//assert(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0));
 			}
 			//////////////////////////////////
-
-			// why are we getting voxels with 0 indices, and indices with empty voxels??
 				
 			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
 				output.bIsEmpty = true;
@@ -129,20 +127,20 @@ namespace ExtractionThreads {
 					// Before we continue, we need to be sure that the triangle is the right material; we don't want to use verticies from other materials
 					if (TriangleMaterial == (Material + 1)) {
 						// If it is of the same material, then we need to add the correct indices now
-						output.Section[Material].Indices.Add(
-							output.Section[Material].Vertices.Add(
+						output.section[Material].Indices.Add(
+							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex2.position) ) * VOXEL_SIZE));
 
 						Index = decoded.getIndex(i + 1);
 						auto Vertex1 = decoded.getVertex(Index);
-						output.Section[Material].Indices.Add(
-							output.Section[Material].Vertices.Add(
+						output.section[Material].Indices.Add(
+							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex1.position)) * VOXEL_SIZE));
 
 						Index = decoded.getIndex(i);
 						auto Vertex0 = decoded.getVertex(Index);
-						output.Section[Material].Indices.Add(
-							output.Section[Material].Vertices.Add(
+						output.section[Material].Indices.Add(
+							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex0.position)) * VOXEL_SIZE));
 
 						// Calculate the tangents of our triangle
@@ -153,8 +151,8 @@ namespace ExtractionThreads {
 						FVector TangentZ = (Edge01 ^ Edge02).GetSafeNormal();
 
 						for (int32 n = 0; n < 3; n++) {
-							output.Section[Material].Tangents.Add(FRuntimeMeshTangent(TangentX, false));
-							output.Section[Material].Normals.Add(TangentZ);
+							output.section[Material].Tangents.Add(FRuntimeMeshTangent(TangentX, false));
+							output.section[Material].Normals.Add(TangentZ);
 						}
 					}
 				}
@@ -197,8 +195,8 @@ namespace ExtractionThreads {
 		void DoWork() {
 			try{
 			FExtractionTaskOutput output;
-			output.Section.AddDefaulted(world->TerrainMaterials.Num());
-			output.Region = lower;
+			output.section.AddDefaulted(world->TerrainMaterials.Num());
+			output.region = lower;
 
 			PolyVox::Region ToExtract(PolyVox::Vector3DInt32(lower.X, lower.Y, lower.Z),
 			                          PolyVox::Vector3DInt32(lower.X + REGION_SIZE-1, lower.Y + REGION_SIZE-1,
@@ -242,8 +240,8 @@ namespace ExtractionThreads {
 				FBufferArchive packetArchive(true);
 				Packet::MakeRegionContents(packetArchive, packet);
 
-				packetOutput.Region = lower;
-				packetOutput.Packet = packetArchive; // this is intentional, is there a better way to value initialize it?
+				packetOutput.region = lower;
+				packetOutput.packet = packetArchive; // this is intentional, is there a better way to value initialize it?
 
 				world->VoxelNetServer_packetQueue.Enqueue(packetOutput);
 				
@@ -277,22 +275,22 @@ namespace ExtractionThreads {
 					// Before we continue, we need to be sure that the triangle is the right material; we don't want to use verticies from other materials
 					if (TriangleMaterial == (Material + 1)) {
 						// If it is of the same material, then we need to add the correct indices now
-						output.Section[Material].Indices.Add(
-							output.Section[Material].Vertices.Add(
+						output.section[Material].Indices.Add(
+							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex2.position) +
 									OffsetLocation) * VOXEL_SIZE));
 
 						Index = decoded.getIndex(i + 1);
 						auto Vertex1 = decoded.getVertex(Index);
-						output.Section[Material].Indices.Add(
-							output.Section[Material].Vertices.Add(
+						output.section[Material].Indices.Add(
+							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex1.position) +
 									OffsetLocation) * VOXEL_SIZE));
 
 						Index = decoded.getIndex(i);
 						auto Vertex0 = decoded.getVertex(Index);
-						output.Section[Material].Indices.Add(
-							output.Section[Material].Vertices.Add(
+						output.section[Material].Indices.Add(
+							output.section[Material].Vertices.Add(
 								(FPolyVoxVector(Vertex0.position) +
 									OffsetLocation) * VOXEL_SIZE));
 
@@ -304,8 +302,8 @@ namespace ExtractionThreads {
 						FVector TangentZ = (Edge01 ^ Edge02).GetSafeNormal();
 
 						for (int32 n = 0; n < 3; n++) {
-							output.Section[Material].Tangents.Add(FRuntimeMeshTangent(TangentX, false));
-							output.Section[Material].Normals.Add(TangentZ);
+							output.section[Material].Tangents.Add(FRuntimeMeshTangent(TangentX, false));
+							output.section[Material].Normals.Add(TangentZ);
 						}
 					}
 				}

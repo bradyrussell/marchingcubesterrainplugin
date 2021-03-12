@@ -37,7 +37,6 @@ APagedWorld::~APagedWorld() {
 
 void APagedWorld::BeginPlay() {
 	Super::BeginPlay();
-
 	VoxelWorldThreadPool = FQueuedThreadPool::Allocate();
 
 	const int32 NUMBER_OF_POOLS = 1;
@@ -54,33 +53,26 @@ void APagedWorld::BeginPlay() {
 
 void APagedWorld::EndPlay(const EEndPlayReason::Type EndPlayReason) { SaveAndShutdown(); }
 
-void APagedWorld::CreateVolume(int32 MemoryTargetMB) {
-	UEPolyvoxLogger* myCustomLogger = new UEPolyvoxLogger();
-	PolyVox::setLoggerInstance(myCustomLogger);
-
-	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), MemoryTargetMB * 1024 * 1024,REGION_SIZE));
-}
-
 void APagedWorld::VoxelUpdatesTick() {
 	while (!voxelUpdateQueue.IsEmpty()) {
 		FVoxelUpdate update;
 		voxelUpdateQueue.Dequeue(update);
 
 		try {
-			for (int32 x = 0; x < update.Radius; x++) {
-				for (int32 y = 0; y < update.Radius; y++) {
-					for (int32 z = 0; z < update.Radius; z++) {
-						const int32 n = update.Radius / 2;
+			for (int32 x = 0; x < update.radius; x++) {
+				for (int32 y = 0; y < update.radius; y++) {
+					for (int32 z = 0; z < update.radius; z++) {
+						const int32 n = update.radius / 2;
 						const int32 nx = x - n;
 						const int32 ny = y - n;
 						const int32 nz = z - n;
 
-						const auto oldMaterial = VoxelVolume->getVoxel(update.Origin.X + nx, update.Origin.Y + ny, update.Origin.Z + nz).getMaterial();
+						const auto oldMaterial = VoxelVolume->getVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz).getMaterial();
 
-						VoxelVolume->setVoxel(update.Origin.X + nx, update.Origin.Y + ny, update.Origin.Z + nz, PolyVox::MaterialDensityPair88(update.Material, update.Density));
-						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.Origin.X + nx, update.Origin.Y + ny, update.Origin.Z + nz)));
+						VoxelVolume->setVoxel(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz, PolyVox::MaterialDensityPair88(update.material, update.density));
+						MarkRegionDirtyAndAdjacent(VoxelToRegionCoords(FIntVector(update.origin.X + nx, update.origin.Y + ny, update.origin.Z + nz)));
 
-						if (VoxelWorldUpdate_Event.IsBound()) { VoxelWorldUpdate_Event.Broadcast(update.CauseActor, update.Origin, oldMaterial, update.Material, update.bShouldDrop); }
+						if (VoxelWorldUpdate_Event.IsBound()) { VoxelWorldUpdate_Event.Broadcast(update.causeActor, update.origin, oldMaterial, update.material, update.bShouldDrop); }
 					}
 				}
 			}
@@ -106,7 +98,7 @@ void APagedWorld::WorldNewRegionsTick() {
 				for (int32 y = 0; y < REGION_SIZE; y++) {
 					for (int32 z = 0; z < REGION_SIZE; z++) {
 						// 
-						VoxelVolume->setVoxel(x + gen.Pos.X, y + gen.Pos.Y, z + gen.Pos.Z, gen.voxel[x][y][z]);
+						VoxelVolume->setVoxel(x + gen.pos.X, y + gen.pos.Y, z + gen.pos.Z, gen.voxel[x][y][z]);
 					}
 				}
 			}
@@ -115,7 +107,7 @@ void APagedWorld::WorldNewRegionsTick() {
 			if (!gen.bIsEmpty) {
 				bool needed = false;
 				for (auto pager : pagingComponents) {
-					if (pager->subscribedRegions.Contains(gen.Pos)) {
+					if (pager->subscribedRegions.Contains(gen.pos)) {
 						// is anyone subscribed to this
 						needed = true;
 						break;
@@ -123,12 +115,12 @@ void APagedWorld::WorldNewRegionsTick() {
 				}
 
 				if (needed)
-					PacketsToSendOrResendToSubscribersNextExtraction.Emplace(gen.Pos);
+					PacketsToSendOrResendToSubscribersNextExtraction.Emplace(gen.pos);
 			}
 
-			MarkRegionDirtyAndAdjacent(gen.Pos);
+			MarkRegionDirtyAndAdjacent(gen.pos);
 			if (RegionGenerated_Event.IsBound())
-				RegionGenerated_Event.Broadcast(gen.Pos);
+				RegionGenerated_Event.Broadcast(gen.pos);
 		}
 	}
 }
@@ -164,13 +156,13 @@ void APagedWorld::VoxelNetServerTick() {
 	while (!VoxelNetServer_packetQueue.IsEmpty()) {
 		FPacketTaskOutput output;
 		VoxelNetServer_packetQueue.Dequeue(output);
-		VoxelNetServer_regionPackets.Emplace(output.Region, output.Packet);
+		VoxelNetServer_regionPackets.Emplace(output.region, output.packet);
 
 		if (!output.bIsEmpty) {
 			// we only request non air regions to be resent
-			if (PacketsToSendOrResendToSubscribersNextExtraction.Contains(output.Region)) {
-				PacketsReadyToSendOrResend.Emplace(output.Region);
-				PacketsToSendOrResendToSubscribersNextExtraction.Remove(output.Region);
+			if (PacketsToSendOrResendToSubscribersNextExtraction.Contains(output.region)) {
+				PacketsReadyToSendOrResend.Emplace(output.region);
+				PacketsToSendOrResendToSubscribersNextExtraction.Remove(output.region);
 			}
 		}
 	}
@@ -236,25 +228,25 @@ void APagedWorld::Tick(float DeltaTime) {
 			FExtractionTaskOutput gen;
 			extractionQueue.Dequeue(gen);
 			NumRegionsPendingExtraction--;
-			auto reg = getRegionAt(gen.Region);
+			auto reg = getRegionAt(gen.region);
 
-			if (PacketsReadyToSendOrResend.Contains(gen.Region)) {
-				ForceSendRegions.Emplace(gen.Region);
-				PacketsReadyToSendOrResend.Remove(gen.Region);
+			if (PacketsReadyToSendOrResend.Contains(gen.region)) {
+				ForceSendRegions.Emplace(gen.region);
+				PacketsReadyToSendOrResend.Remove(gen.region);
 			}
 
 			if (reg != nullptr) {
 				reg->RenderParsed(gen);
 				if (!gen.bIsEmpty) {
 					reg->UpdateNavigation();
-					SetHighestGeneratedRegionAt(gen.Region.X, gen.Region.Y, gen.Region.Z);
+					SetHighestGeneratedRegionAt(gen.region.X, gen.region.Y, gen.region.Z);
 				}
 			}
 			else {
 				if (!gen.bIsEmpty)
 				UE_LOG(LogVoxelWorld, Warning, TEXT("Non-air region was meshed but actor has not replicated."));
 
-				OnRegionError(gen.Region);
+				OnRegionError(gen.region);
 			}
 		}
 
@@ -401,6 +393,11 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 
 void APagedWorld::PostInitializeComponents() {
 	Super::PostInitializeComponents();
+
+	UEPolyvoxLogger* myCustomLogger = new UEPolyvoxLogger();
+	PolyVox::setLoggerInstance(myCustomLogger);
+
+	VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), VolumeTargetMemoryMB * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 256 * 1024 * 1024,REGION_SIZE));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this)));
 	//VoxelVolume = MakeShareable(new PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>(new WorldPager(this), 2 * 1024 * 1024 * 1024,REGION_SIZE));
@@ -409,6 +406,20 @@ void APagedWorld::PostInitializeComponents() {
 void APagedWorld::BeginDestroy() {
 	Super::BeginDestroy();
 	SaveAndShutdown();
+}
+
+int32 APagedWorld::DEBUG_GetPagedRegionCount() {
+	DEBUG_pagedRegionsLock.Lock();
+	auto Num = DEBUG_pagedRegions.Num();
+	DEBUG_pagedRegionsLock.Unlock();
+	return Num;
+}
+
+int32 APagedWorld::DEBUG_GetPagedRegionCounter() {
+	DEBUG_pagedRegionsLock.Lock();
+	auto Num = DEBUG_pagedRegionsCounter;
+	DEBUG_pagedRegionsLock.Unlock();
+	return Num;
 }
 
 void APagedWorld::SaveAndShutdown() {
@@ -634,22 +645,17 @@ int32 APagedWorld::getVolumeMemoryBytes() const { return VoxelVolume.IsValid() ?
 void APagedWorld::Flush() const { VoxelVolume.Get()->flushAll(); }
 
 void APagedWorld::LaunchServer() {
-	CreateVolume(VolumeTargetMemoryMB);
 	bIsVoxelNetServer = true;
 	ConnectToDatabase(WorldName);
 	VoxelNetServer_StartServer();
 }
 
 void APagedWorld::LaunchSingleplayer() {
-	CreateVolume(ClientVolumeTargetMemoryMB);
 	bIsVoxelNetSingleplayer = true;
 	ConnectToDatabase(WorldName);
 }
 
-void APagedWorld::LaunchClient(FString Host, int32 Port) {
-	CreateVolume(ClientVolumeTargetMemoryMB);
-	VoxelNetClient_ConnectToServer(Host, Port);
-}
+void APagedWorld::LaunchClient(FString Host, int32 Port) { VoxelNetClient_ConnectToServer(Host, Port); }
 
 void APagedWorld::ForceSaveWorld() {
 	PreSaveWorld();
@@ -1314,30 +1320,15 @@ void APagedWorld::DisconnectPlayerFromVoxelNet(APlayerController* player) {
 }
 
 
-int32 APagedWorld::DEBUG_GetPagedRegionCount() {
-	DEBUG_pagedRegionsLock.Lock();
-	auto Num = DEBUG_pagedRegions.Num();
-	DEBUG_pagedRegionsLock.Unlock();
-	return Num;
-}
-
-int32 APagedWorld::DEBUG_GetPagedRegionCounter() {
-	DEBUG_pagedRegionsLock.Lock();
-	auto Num = DEBUG_pagedRegionsCounter;
-	DEBUG_pagedRegionsLock.Unlock();
-	return Num;
-}
-
 WorldPager::WorldPager(APagedWorld* World)
 	: world(World) {
 }
 
 void WorldPager::pageIn(const PolyVox::Region& region, PolyVox::PagedVolume<PolyVox::MaterialDensityPair88>::Chunk* pChunk) {
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
-
 		const auto pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
-		
-		world->DEBUG_pagedRegionsLock.Lock();
+
+				world->DEBUG_pagedRegionsLock.Lock();
 		world->DEBUG_pagedRegions.Add(pos);
 		world->DEBUG_pagedRegionsCounter++;
 		world->DEBUG_pagedRegionsLock.Unlock();
@@ -1352,11 +1343,10 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 	if (world->bIsVoxelNetServer || world->bIsVoxelNetSingleplayer) {
 		const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
-		world->DEBUG_pagedRegionsLock.Lock();
+				world->DEBUG_pagedRegionsLock.Lock();
 		world->DEBUG_pagedRegions.Remove(pos);
 		world->DEBUG_pagedRegionsCounter--;
 		world->DEBUG_pagedRegionsLock.Unlock();
-		
 		// get savablewithregion actors in this region
 		// AsyncTask(ENamedThreads::GameThread, [this, pos]() { // for now this will have to do
 		// 	
