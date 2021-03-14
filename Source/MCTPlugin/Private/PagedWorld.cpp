@@ -18,6 +18,7 @@
 #include "MCTPlugin.h"
 #include "StorageProviderFlatfile.h"
 #include "Net/UnrealNetwork.h"
+#include "StorageProviderTMap.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -184,6 +185,9 @@ void APagedWorld::Tick(float DeltaTime) {
 #endif
 		VolumeMutex.Lock();
 
+		// todo this is a temporary stopgap for issue 52. this definitely will degrade server performance during exploration
+		if(bIsVoxelNetServer && getVolumeMemoryBytes() >= (VolumeTargetMemoryMB * 1024 * 1024)/2) Flush();
+		
 		WorldNewRegionsTick();
 
 #ifdef WORLD_TICK_TRACKING
@@ -353,8 +357,8 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 		bHasStarted = true;
 		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
-		//WorldStorageProvider = new StorageProviderTMap(true);
-		WorldStorageProvider = new StorageProviderNull();
+		WorldStorageProvider = new StorageProviderTMap(true);
+		//WorldStorageProvider = new StorageProviderNull();
 
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
 
@@ -1358,7 +1362,7 @@ void WorldPager::pageOut(const PolyVox::Region& region, PolyVox::PagedVolume<Pol
 			const FIntVector pos = FIntVector(region.getLowerX(), region.getLowerY(), region.getLowerZ());
 
 			world->DEBUG_pagedRegionsLock.Lock();
-			world->DEBUG_pagedRegions.Remove(pos);
+			world->DEBUG_pagedRegions.Remove(pos); // todo this wont be called if the region hasnt changed
 			world->DEBUG_pagedRegionsCounter--;
 			world->DEBUG_pagedRegionsLock.Unlock();
 			// get savablewithregion actors in this region

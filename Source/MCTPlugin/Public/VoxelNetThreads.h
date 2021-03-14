@@ -281,6 +281,7 @@ namespace VoxelNetThreads {
 			}
 			else {
 				UE_LOG(LogVoxelNet, Warning, TEXT("Server to %s: Disconnecting %s due to request. "), *endpoint.ToString(), *endpoint.ToString());
+				Disconnect();
 				return 0;
 			}
 		}

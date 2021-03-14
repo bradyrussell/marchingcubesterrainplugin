@@ -112,7 +112,7 @@ public:
 	StorageProviderBase* WorldStorageProvider;
 
 	/* Memory */
-	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly) int32 VolumeTargetMemoryMB = 512;
+	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly) int32 VolumeTargetMemoryMB = 256;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) void Flush() const;
 

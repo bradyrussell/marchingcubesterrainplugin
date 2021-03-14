@@ -99,15 +99,15 @@ namespace ExtractionThreads {
 			 * 3/7/21  are there situations where all voxels are empty but there is still a mesh ? 
 			 *	if not we can just check the packet on the server for bIsEmpty to skip the volume reads
 			 */ // i dont think this works
-			if(world->bIsVoxelNetServer) {
+			/*if(world->bIsVoxelNetServer) {
 				// if this asserts false then the above optimization is not valid
 				if(!(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0))) {
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask packet empty != indices empty: %d vs %d"), tempDebug_PacketWasEmpty, decoded.getNoOfIndices())
 				}/* else {
 					UE_LOG(LogVoxelWorld, Error, TEXT("[Error] MarchingCubesExtractionTask packet empty == indices empty: %d vs %d"), tempDebug_PacketWasEmpty, decoded.getNoOfIndices())
-				}*/
+				}#1#
 				//assert(tempDebug_PacketWasEmpty == (decoded.getNoOfIndices() == 0));
-			}
+			}*/
 			//////////////////////////////////
 				
 			if (decoded.getNoOfIndices() == 0){ // still need to mark these ready 
