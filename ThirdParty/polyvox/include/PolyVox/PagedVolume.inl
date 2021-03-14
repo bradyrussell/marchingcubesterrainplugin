@@ -299,10 +299,15 @@ namespace PolyVox
 				iIndex %= uChunkArraySize;
 			} while (i2Index != iPosisionHash); // Keep searching until we get back to our start position.
 
+
 			// This should never really happen unless we are failing to keep our number of active chunks
 			// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
-			POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
+			POLYVOX_LOG_WARNING_IF(!bInsertedSucessfully, "No space in chunk array for new chunk.");
 
+			if(!bInsertedSucessfully) { // lets see what happens B)
+				m_arrayChunks[iPosisionHash] = std::move(std::unique_ptr< Chunk >(pChunk));
+			}
+			
 			// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
 			// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
 			// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
@@ -358,5 +363,25 @@ namespace PolyVox
 		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
 		return PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
 	}
+
+		/*////////////////////////////////////////////////////////////////////////////////
+	/// Calculate the memory usage of the volume.
+	////////////////////////////////////////////////////////////////////////////////
+	template <typename VoxelType>
+	uint32_t PagedVolume<VoxelType>::calculateTableSize(void)
+	{
+		uint32_t uChunkCount = 0;
+		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
+		{
+			if (m_arrayChunks[uIndex])
+			{
+				uChunkCount++;
+			}
+		}
+
+		// Note: We disregard the size of the other class members as they are likely to be very small compared to the size of the
+		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
+		return PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
+	}*/
 }
 
