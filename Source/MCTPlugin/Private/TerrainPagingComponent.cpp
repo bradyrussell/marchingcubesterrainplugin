@@ -54,11 +54,11 @@ void UTerrainPagingComponent::BeginPlay() {
 	}
 	world = Cast<APagedWorld>(worldActors[0]);
 	world->RegisterPagingComponent(this);
+
 }
 
 void UTerrainPagingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	DebugWaitingForAmount = waitingForPackets.Num();
 }
 
 void UTerrainPagingComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const {

@@ -19,6 +19,8 @@
 #include "StorageProviderFlatfile.h"
 #include "Net/UnrealNetwork.h"
 #include "StorageProviderTMap.h"
+#include "StorageProviderJson.h"
+#include "IRegionUnloadListener.h"
 
 #ifdef WORLD_TICK_TRACKING
 DECLARE_CYCLE_STAT(TEXT("World Process New Regions"), STAT_WorldNewRegions, STATGROUP_VoxelWorld);
@@ -122,6 +124,13 @@ void APagedWorld::WorldNewRegionsTick() {
 			}
 
 			MarkRegionDirtyAndAdjacent(gen.pos);
+			SetRegionGenerated(gen.pos, true);
+
+			if(ToPopulatePendingGeneration.Contains(gen.pos)) {
+				ToPopulatePendingGeneration.Remove(gen.pos);
+				ToPopulatePendingExtraction.Add(gen.pos);
+			}
+			
 			if (RegionGenerated_Event.IsBound())
 				RegionGenerated_Event.Broadcast(gen.pos);
 		}
@@ -178,7 +187,10 @@ void APagedWorld::Tick(float DeltaTime) {
 	//PacketsToSendOrResendToSubscribersNextExtraction.Reset();
 
 	// get any recently generated packets and put them in the queue
-	if (bIsVoxelNetServer) { VoxelNetServerTick(); }
+	if (bIsVoxelNetServer) {
+		VoxelNetServerTick();
+		ServerCheckSavableWithRegionsOutOfBounds();
+	}
 #ifdef WORLD_TICK_TRACKING
 	{
 		SCOPE_CYCLE_COUNTER(STAT_WorldNewRegions);
@@ -235,7 +247,7 @@ void APagedWorld::Tick(float DeltaTime) {
 			extractionQueue.Dequeue(gen);
 			NumRegionsPendingExtraction--;
 			auto reg = getRegionAt(gen.region);
-
+			
 			if (PacketsReadyToSendOrResend.Contains(gen.region)) {
 				ForceSendRegions.Emplace(gen.region);
 				PacketsReadyToSendOrResend.Remove(gen.region);
@@ -246,6 +258,13 @@ void APagedWorld::Tick(float DeltaTime) {
 				if (!gen.bIsEmpty) {
 					reg->UpdateNavigation();
 					SetHighestGeneratedRegionAt(gen.region.X, gen.region.Y, gen.region.Z);
+				}
+
+				if(ToPopulatePendingExtraction.Contains(gen.region)) {
+					ToPopulatePendingExtraction.Remove(gen.region);
+					//check to prevent double populating if an area is loaded multiple times during generation / extraction
+					if(!IsRegionPopulated(gen.region) && PopulateRegion_Event.IsBound()) PopulateRegion_Event.Broadcast(gen.region);
+					SetRegionPopulated(gen.region, true);
 				}
 			}
 			else {
@@ -357,7 +376,8 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 		bHasStarted = true;
 		//WorldStorageProvider = new StorageProviderLevelDB(true);
 		//WorldStorageProvider = new StorageProviderFlatfile();
-		WorldStorageProvider = new StorageProviderTMap(true);
+		WorldStorageProvider = new StorageProviderTMap(false);
+		//WorldStorageProvider = new StorageProviderJson(true);
 		//WorldStorageProvider = new StorageProviderNull();
 
 		auto status = WorldStorageProvider->Open(TCHAR_TO_UTF8(*Name), true);
@@ -394,6 +414,17 @@ void APagedWorld::ConnectToDatabase(FString Name) {
 			if (NextPersistentActorID <= 0)
 				NextPersistentActorID = 1;
 		}
+
+		// this might not be the best place for this but
+		TArray<uint8> Statisticsbytes;
+		if (WorldStorageProvider->GetGlobalData("Statistics", Statisticsbytes)) {
+			FMemoryReader reader(Statisticsbytes, true);
+
+			reader << Statistics;
+
+			reader.Flush();
+			reader.Close();
+		}
 	}
 }
 
@@ -412,6 +443,17 @@ void APagedWorld::PostInitializeComponents() {
 void APagedWorld::BeginDestroy() {
 	Super::BeginDestroy();
 	SaveAndShutdown();
+}
+
+void APagedWorld::ServerCheckSavableWithRegionsOutOfBounds() {
+	TArray<AActor*> OutActors;
+	UGameplayStatics::GetAllActorsWithInterface(GetWorld(),UISavableWithRegion::StaticClass(),OutActors);
+	for(auto& elem:OutActors) {
+		auto Region = VoxelToRegionCoords(WorldToVoxelCoords(IISavableWithRegion::Execute_GetSaveTransform(elem).GetLocation()));
+		if(!regions.Contains(Region)) {
+			UE_LOG(LogTemp,Warning,TEXT("SavableWithRegion %s has entered an unloaded region. Current region %s"), *elem->GetName(),*Region.ToString());
+		}
+	}
 }
 
 int32 APagedWorld::DEBUG_GetPagedRegionCount() {
@@ -585,7 +627,7 @@ void APagedWorld::MarkRegionDirtyAndAdjacent(const FIntVector& pos) {
 }
 
 
-void APagedWorld::PrefetchRegionsInRadius(const FIntVector& pos, int32 radius) const {
+void APagedWorld::PrefetchRegionsInRadius(const FIntVector& pos, int32 radius){
 	auto reg = PolyVox::Region(pos.X, pos.Y, pos.Z, pos.X + REGION_SIZE, pos.Y + REGION_SIZE, pos.Z + REGION_SIZE);
 	reg.grow(radius * REGION_SIZE);
 	VoxelVolume.Get()->prefetch(reg);
@@ -598,6 +640,17 @@ bool APagedWorld::isRegionEmptyLocal(const FIntVector& pos) {
 		return region->bEmptyLocally;
 	}
 	return false;
+}
+
+// max 312 regions out
+int32 APagedWorld::GetRegionRing(const FIntVector& RegionCoords) {
+	const float Distance = FMath::Max(FMath::Abs(RegionCoords.X), FMath::Abs(RegionCoords.Y)) / REGION_SIZE;
+	return FMath::Clamp(FMath::RoundToInt(0.3204435f + 0.2370108f*Distance + 0.002505812f*Distance*Distance), 1, 255);
+	//return FMath::Clamp(FMath::Max(FMath::Abs(RegionCoords.X), FMath::Abs(RegionCoords.Y)) / REGION_SIZE, 1, 255);
+
+	/*if(RegionDistanceFromSpawn / (4 * REGION_SIZE) >= 128 * REGION_SIZE) return RegionDistanceFromSpawn / (1 * REGION_SIZE);
+	if(RegionDistanceFromSpawn / (4 * REGION_SIZE) >= 64 * REGION_SIZE) return RegionDistanceFromSpawn / (2 * REGION_SIZE);
+	return RegionDistanceFromSpawn / (4 * REGION_SIZE);*/
 }
 
 FIntVector APagedWorld::VoxelToRegionCoords(const FIntVector& VoxelCoords) {
@@ -686,6 +739,16 @@ void APagedWorld::PreSaveWorld() {
 	writer.Close();
 
 	WorldStorageProvider->PutGlobalData("NextPersistentActorID", data);
+
+	TArray<uint8> data2;
+	FMemoryWriter writer2(data, true);
+
+	writer2 << Statistics;
+
+	writer2.Flush();
+	writer2.Close();
+
+	WorldStorageProvider->PutGlobalData("Statistics", data2);
 }
 
 void APagedWorld::PostSaveWorld() {
@@ -1177,6 +1240,100 @@ bool APagedWorld::LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawne
 
 }
 
+TArray<AActor*> APagedWorld::PopulateSurfaceActors(FIntVector Region,
+	TSubclassOf<AActor> ActorClass,
+	FVector SpawnOffset,
+	FVector2D ScaleRange,
+	const FRandomStream& RandomStream,
+	uint8 HeightmapIndex,
+	float ChanceToOccur,
+	FVector2D AmountRange) {
+	TArray<AActor*> OutActors;
+	
+	if(ChanceToOccur < RandomStream.GetFraction()) {
+		for (int i = 0; i < RandomStream.RandRange(AmountRange.X,AmountRange.Y); ++i) {
+			OutActors.Add(PopulateSurfaceActor(Region, ActorClass, SpawnOffset, ScaleRange, RandomStream, HeightmapIndex));
+		}
+	}
+	return OutActors;
+}
+
+bool APagedWorld::IsSurfaceRegion(FIntVector Region, uint8 HeightmapIndex) {
+	const float Z = GetHeightmapZ(Region.X, Region.Y, HeightmapIndex);
+	return Z >= 0.f && Z >= Region.Z && Z < Region.Z+32;
+}
+
+AActor* APagedWorld::PopulateSurfaceActor_Implementation(FIntVector Region, TSubclassOf<AActor> ActorClass, FVector SpawnOffset, FVector2D ScaleRange, const FRandomStream& RandomStream, uint8 HeightmapIndex) {
+	const float SpawnX = RandomStream.FRandRange(0.f,31.f) + Region.X;
+	const float SpawnY = RandomStream.FRandRange(0.f,31.f) + Region.Y;
+	const float SpawnZ = GetHeightmapZ(FMath::RoundToInt(SpawnX), FMath::RoundToInt(SpawnY), HeightmapIndex);
+	
+	if(SpawnZ >= 0.f && SpawnZ >= Region.Z && SpawnZ < Region.Z+32) {
+		const auto SpawnLocation = SpawnOffset + FVector(SpawnX, SpawnY, SpawnZ) * 100.f;
+		const FRotator SpawnRotation = FRotator(0.f, RandomStream.FRandRange(0.f,359.99f), 0.f);
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		AActor* SpawnActor = GetWorld()->SpawnActor<AActor>(ActorClass.Get(), SpawnLocation, SpawnRotation, SpawnParameters);
+		if(SpawnActor) SpawnActor->SetActorScale3D(FVector(RandomStream.FRandRange(ScaleRange.X, ScaleRange.Y)));
+		return SpawnActor;
+	}
+	return nullptr;
+}
+
+void APagedWorld::QueueRegionPopulation(FIntVector Region) {
+	if(!IsRegionPopulated(Region)) {
+		if(IsRegionGenerated(Region)) {
+			ToPopulatePendingExtraction.Add(Region);
+		} else {
+			ToPopulatePendingGeneration.Add(Region);
+		}
+	}
+}
+
+void APagedWorld::QueueRegionPopulations(TSet<FIntVector> Regions) {
+	for(auto&Region:Regions) {
+		QueueRegionPopulation(Region);
+	}
+}
+
+bool APagedWorld::IsRegionPopulated(FIntVector RegionCoords) {
+	if(WorldStorageProvider) {
+		TArray<uint8> OutBytes;
+		if(WorldStorageProvider->GetRegionalData(RegionCoords, PopulatedStorageIndex, OutBytes)) {
+			return OutBytes[0];
+		}
+	}
+	return false;
+}
+
+bool APagedWorld::SetRegionPopulated(FIntVector RegionCoords, bool bIsPopulated) {
+	if(WorldStorageProvider) {
+		TArray<uint8> Bytes({bIsPopulated});
+		WorldStorageProvider->PutRegionalData(RegionCoords, PopulatedStorageIndex, Bytes);
+		return true;
+	}
+	return false;
+}
+
+bool APagedWorld::IsRegionGenerated(FIntVector RegionCoords) {
+	if(WorldStorageProvider) {
+		TArray<uint8> OutBytes;
+		if(WorldStorageProvider->GetRegionalData(RegionCoords, GeneratedStorageIndex, OutBytes)) {
+			return OutBytes[0];
+		}
+	}
+	return false;
+}
+
+bool APagedWorld::SetRegionGenerated(FIntVector RegionCoords, bool bIsGenerated) {
+	if(WorldStorageProvider) {
+		TArray<uint8> Bytes({bIsGenerated});
+		WorldStorageProvider->PutRegionalData(RegionCoords, GeneratedStorageIndex, Bytes);
+		return true;
+	}
+	return false;
+}
+
 AActor* APagedWorld::GetPersistentActor(int64 ID) {
 	auto actor = LivePersistentActors.Find(ID);
 
@@ -1241,7 +1398,7 @@ void APagedWorld::PagingComponentTick() {
 	TSet<UTerrainPagingComponent*> toRemove;
 
 	for (auto& pager : pagingComponents) {
-		if (!IsValid(pager)) { toRemove.Add(pager); } // fixed concurrent modification 8/24/19
+		if (!IsValid(pager)) { toRemove.Add(pager); } 
 		else {
 			auto previousSubscribedRegions = pager->subscribedRegions;
 			pager->subscribedRegions.Reset();
@@ -1291,12 +1448,21 @@ void APagedWorld::UnloadRegionsExcept(TSet<FIntVector> regionsToLoad) {
 	SaveAllDataForRegions(toUnload);
 	LoadAllDataForRegions(toLoad);
 
+	TArray<AActor*> OutActors;
+	UGameplayStatics::GetAllActorsWithInterface(GetWorld(), UIRegionUnloadListener::StaticClass(), OutActors);
+
+	for(auto&Actor:OutActors) {
+		FIntVector Region = IIRegionUnloadListener::Execute_GetRegion(Actor);
+		if(toUnload.Contains(Region)) IIRegionUnloadListener::Execute_OnUnloaded(Actor);
+	}
+	
 	for (auto& unload : toUnload) { regions.FindAndRemoveChecked(unload)->SetLifeSpan(.1); }
 
 	for (auto& load : toLoad) {
 		if (!regions.Contains(load)) {
 			getRegionAt(load);
 			MarkRegionDirtyAndAdjacent(load);
+			QueueRegionPopulation(load);
 		}
 	}
 }

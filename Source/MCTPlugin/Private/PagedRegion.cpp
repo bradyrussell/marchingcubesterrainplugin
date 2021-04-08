@@ -11,6 +11,7 @@ APagedRegion::APagedRegion() {
 
 	bReplicates = true;
 	bAlwaysRelevant = true; // we manage our own culling
+	GetRuntimeMeshComponent()->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECollisionResponse::ECR_Block);
 }
 
 void APagedRegion::Tick(float DeltaTime) { Super::Tick(DeltaTime); }
@@ -36,7 +37,7 @@ void APagedRegion::BeginPlay() {
 		FRuntimeMeshCollisionSettings CollisionSettings;
 		CollisionSettings.bUseAsyncCooking = World->bUseAsyncCollision;
 		CollisionSettings.bUseComplexAsSimple = true;
-
+	
 		StaticProvider->SetCollisionSettings(CollisionSettings);
 
 		//this is meant to allow the regions map to be replicated
@@ -61,6 +62,8 @@ void APagedRegion::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 void APagedRegion::RenderParsed(const FExtractionTaskOutput& output) {
 	if (!StaticProvider) { UE_LOG(LogVoxelWorld, Error, TEXT("There is no provider when trying to render parsed.")); }
 
+	bool bHasMesh = false;
+	
 	// for each LOD level in output
 	//if(!output.bIsEmpty){   // this is making it so the last mesh of a region cant be cleared. i dont see any harm in iterating on air regions
 		for (int32 Material = 0; Material < output.section.Num(); Material++) {
@@ -71,12 +74,13 @@ void APagedRegion::RenderParsed(const FExtractionTaskOutput& output) {
 					                                            output.section[Material].Colors, output.section[Material].Tangents, ERuntimeMeshUpdateFrequency::Frequent, true);
 
 					bSectionExists[Material] = true;
+					bHasMesh = true;
 				}
 				else {
 					StaticProvider->UpdateSectionFromComponents(0, Material, output.section[Material].Vertices, output.section[Material].Indices, output.section[Material].Normals,
 					                                            output.section[Material].UV0,
 					                                            output.section[Material].Colors, output.section[Material].Tangents);
-
+					bHasMesh = true;
 				//	StaticProvider->MarkCollisionDirty(); // does it matter that i call this numerous time? i assume not because they are all in succession
 						// if it does I can change it to a function scope bNeedsMarkedDirty since it applies for the whole provider not just the section
 				}
@@ -89,7 +93,7 @@ void APagedRegion::RenderParsed(const FExtractionTaskOutput& output) {
 			}
 		}
 	//}
-	StaticProvider->MarkCollisionDirty(); 
+	/*if(bHasMesh) */StaticProvider->MarkCollisionDirty(); 
 
 	bEmptyLocally = output.bIsEmpty;
 	bReadyLocally = true;

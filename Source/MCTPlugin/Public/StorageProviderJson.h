@@ -10,13 +10,13 @@
 /**
  * 
  */
-class MCTPLUGIN_API StorageProviderTMap: public StorageProviderBase
+class MCTPLUGIN_API StorageProviderJson: public StorageProviderBase
 {
 public:
-	StorageProviderTMap(bool bShouldSaveToFile);
-	virtual ~StorageProviderTMap();
+	StorageProviderJson(bool bShouldSaveToFile);
+	virtual ~StorageProviderJson();
 
-	TMap<FString,TArray<uint8>> DatabaseMap;
+	TSharedPtr<FJsonObject> DatabaseJson;
 	FCriticalSection DBLock;
 	
 	std::string DBName;

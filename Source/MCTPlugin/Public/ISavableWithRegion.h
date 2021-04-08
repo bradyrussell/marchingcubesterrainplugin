@@ -23,8 +23,8 @@ class MCTPLUGIN_API IISavableWithRegion
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
 
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") FTransform GetSaveTransform();
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") void OnPreSave();
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") void OnSaved();
-	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = "Savable With Region") void OnLoaded();
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Savable With Region") FTransform GetSaveTransform();
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Savable With Region") void OnPreSave();
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Savable With Region") void OnSaved();
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Savable With Region") void OnLoaded();
 };

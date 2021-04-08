@@ -27,7 +27,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FVoxelNetHandshake,const int64, cook
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPreSaveWorld,const bool, isQuitting);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPostSaveWorld,const bool, isQuitting);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRegionGenerated,const FIntVector&, Region);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPopulateRegion,const FIntVector&, Region);
 
+#define REGION_RING_THICKNESS 2
 
 #ifdef WORLD_TICK_TRACKING
 	DECLARE_STATS_GROUP(TEXT("VoxelWorld"), STATGROUP_VoxelWorld, STATCAT_Advanced);
@@ -50,6 +52,7 @@ protected:
 	void VoxelNetServerTick();
 	void PostInitializeComponents() override;
 	void BeginDestroy() override;
+	void ServerCheckSavableWithRegionsOutOfBounds();
 
 	// PIE is not saving properly it just exits immediately without cleaning anything up...
 	
@@ -81,6 +84,9 @@ public:
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionReadyLocal(const FIntVector& pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyServer(const FIntVector& pos);
 	UFUNCTION(Category = "Voxel World", BlueprintCallable) bool isRegionEmptyLocal(const FIntVector& pos);
+
+	// get the 'ring' this region is contained in. max(abs(x),abs(y)) / thickness
+	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static int32 GetRegionRing(const FIntVector& RegionCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector VoxelToRegionCoords(const FIntVector& VoxelCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FIntVector WorldToVoxelCoords(const FVector& WorldCoords);
 	UFUNCTION(Category = "Voxel World|Coordinates", BlueprintPure) static FVector VoxelToWorldCoords(const FIntVector& VoxelCoords);
@@ -110,7 +116,7 @@ public:
 	/* Database */
 	UFUNCTION(Category = "Voxel World|Database", BlueprintCallable) void ConnectToDatabase(FString Name);
 	StorageProviderBase* WorldStorageProvider;
-
+	
 	/* Memory */
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly) int32 VolumeTargetMemoryMB = 256;
 	UFUNCTION(Category = "Voxel World|Volume Memory", BlueprintCallable) int32 getVolumeMemoryBytes() const;
@@ -136,7 +142,27 @@ public:
 	UFUNCTION(Category = "Voxel World|Saving", BlueprintCallable, BlueprintAuthorityOnly) bool LoadAndSpawnPlayerActor(FString Identifier, AActor*& OutSpawnedActor);
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPreSaveWorld PreSaveWorld_Event;
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Saving") FPostSaveWorld PostSaveWorld_Event;
-
+	
+	/* Population */
+	// population happens the first time a region is loaded by a player , when the terrain has been generated
+	UFUNCTION(BlueprintCallable) TArray<AActor*> PopulateSurfaceActors(FIntVector Region, TSubclassOf<AActor> ActorClass, FVector SpawnOffset, FVector2D ScaleRange, const FRandomStream& RandomStream, uint8 HeightmapIndex, float ChanceToOccur, FVector2D AmountRange);
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent) AActor* PopulateSurfaceActor(FIntVector Region, TSubclassOf<AActor> ActorClass, FVector SpawnOffset, FVector2D ScaleRange, const FRandomStream& RandomStream, uint8 HeightmapIndex);
+	UFUNCTION(BlueprintCallable) bool IsSurfaceRegion(FIntVector Region, uint8 HeightmapIndex);
+	
+	const static uint8 GeneratedStorageIndex = 6;
+	const static uint8 PopulatedStorageIndex = 7;
+	TSet<FIntVector> ToPopulatePendingGeneration;
+	TSet<FIntVector> ToPopulatePendingExtraction;
+	UFUNCTION(Category = "Voxel World|Population", BlueprintCallable, BlueprintAuthorityOnly) void QueueRegionPopulation(FIntVector Region);
+	UFUNCTION(Category = "Voxel World|Population", BlueprintCallable, BlueprintAuthorityOnly) void QueueRegionPopulations(TSet<FIntVector> Regions);
+	UFUNCTION(Category = "Voxel World|Population", BlueprintCallable, BlueprintAuthorityOnly) bool IsRegionPopulated(FIntVector RegionCoords);
+	UFUNCTION(Category = "Voxel World|Population", BlueprintCallable, BlueprintAuthorityOnly) bool SetRegionPopulated(FIntVector RegionCoords, bool bIsPopulated);
+	UFUNCTION(Category = "Voxel World|Population", BlueprintCallable, BlueprintAuthorityOnly) bool IsRegionGenerated(FIntVector RegionCoords);
+	UFUNCTION(Category = "Voxel World|Population", BlueprintCallable, BlueprintAuthorityOnly) bool SetRegionGenerated(FIntVector RegionCoords, bool bIsGenerated);
+	
+	// i dont really like having this in the world class but its the easiest way to save / load
+	UPROPERTY() TMap<FString, float> Statistics;
+	
 	/* Actor Ref Persistence */
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) TMap<int64, AActor*> LivePersistentActors;
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere) int64 NextPersistentActorID = 1; // 0 is reserved for null
@@ -162,7 +188,7 @@ public:
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void BeginWorldGeneration(const FIntVector& RegionCoords);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) int32 GetRegionSeed(const FIntVector& RegionCoords);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable, BlueprintAuthorityOnly) float GetHeightmapZ(int32 VoxelX, int32 VoxelY, uint8 HeightmapIndex = 0);
-	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(const FIntVector& pos, int32 radius) const;
+	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PrefetchRegionsInRadius(const FIntVector& pos, int32 radius);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void RegisterPagingComponent(UTerrainPagingComponent* pagingComponent);
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void PagingComponentTick();
 	UFUNCTION(Category = "Voxel World|Generation", BlueprintCallable) void UnloadRegionsExcept(TSet<FIntVector> loadedRegions);
@@ -174,6 +200,7 @@ public:
 	int32 RegionSeedRandomZ;
 
 	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FRegionGenerated RegionGenerated_Event;
+	UPROPERTY(BlueprintAssignable, Category="Voxel World|Generation") FPopulateRegion PopulateRegion_Event;
 	//WorldGeneratorBase * WorldGenerationProvider;
 	TQueue<FWorldGenerationTaskOutput, EQueueMode::Mpsc> worldGenerationQueue;
 	float PagingComponentTickTimer = 0;

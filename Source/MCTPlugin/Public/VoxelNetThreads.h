@@ -28,7 +28,7 @@ namespace VoxelNetThreads {
 			: socket(socket), world(world), running(true) {
 		}
 
-
+		// todo doesnt die , will crash if joining a second server after the first join
 		void Updated() { lastUpdate = FDateTime::Now(); }
 
 		void KeepAlive() {

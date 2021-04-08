@@ -76,6 +76,10 @@ struct FRegionVoxels // a region of voxels copied in a game-readable format
 	GENERATED_BODY()
 	int32 Material[REGION_SIZE][REGION_SIZE][REGION_SIZE];
 	int32 Density[REGION_SIZE][REGION_SIZE][REGION_SIZE];
+
+	/*int32 GetIndex(FIntVector LocalRegionCoord) {
+		return LocalRegionCoord.X | (LocalRegionCoord.Y << 8) | (LocalRegionCoord.Z << 16);
+	}*/
 };
 
 USTRUCT(BlueprintType)

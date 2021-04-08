@@ -154,26 +154,34 @@ PolyVox::MaterialDensityPair88 WorldGen::Interpret_Mars(int32 x, int32 y, int32 
  *	0		|	Island Height 2d
  *	1		|	Island Depth 2d
  *	2		|	Material 3d
+ *	3		|	Caves 3d
  */
 PolyVox::MaterialDensityPair88 WorldGen::Interpret_Island2(int32 x, int32 y, int32 z,const TArray<UUFNNoiseGenerator*>& noise) {
 	if (noise.Num() < 2) {
 		UE_LOG(LogTemp, Warning, TEXT("Aborting region generation, cannot access noise."))
 		return PolyVox::MaterialDensityPair88();
 	}
-
-	float totalHeight = noise[0]->GetNoise2D(x, y);
-	int32 Height = totalHeight;
+	const float totalHeight = noise[0]->GetNoise2D(x, y);
+	//const float totalHeight = FMath::Max(-1.f,noise[0]->GetNoise2D(x, y));
+	const int32 Height = totalHeight;
 
 	if(z > Height) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
 
-	auto Depth = noise[1]->GetNoise2D(x,y);
+	const auto Depth = /*FMath::Max(0.f,noise[1]->GetNoise2D(x,y))*/0.f;
 	if(z < -Depth) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
+
+	const auto Caves = noise[3]->GetNoise3D(x,y,z);
+	if(Caves > 0.1f) return PolyVox::MaterialDensityPair88(MATERIAL_AIR, 0);
 	
 	// todo maybe depth density?  
-	int32 Density = FMath::FloorToInt(FMath::Abs(totalHeight - Height) * 128.f)+128; // converts the fractional part of the height to a range 128-255
+	const int32 Density = FMath::FloorToInt(FMath::Abs(totalHeight - Height) * 128.f)+128; // converts the fractional part of the height to a range 128-255
 
-	auto Material = FMath::Clamp(FMath::RoundToInt(noise[2]->GetNoise3D(x,y,z)),1,1);
-	if(z == Height || z == -Depth) return PolyVox::MaterialDensityPair88(Material+1, Density);
+	const auto Material = FMath::Clamp(FMath::RoundToInt(noise[2]->GetNoise3D(x,y,z)),1,1);
+
+	//todo this will make wall interior voxels less dense
+	//if(Caves > 0.f && Caves <= 0.1f) return PolyVox::MaterialDensityPair88(Material, FMath::FloorToInt((1.f-(Caves * 10.f)) * 128.f)+128); // should make smooth density gradient on cave walls?
+	
+	if(z == Height || z == -Depth) return PolyVox::MaterialDensityPair88(MATERIAL_DIRT, Density);
 	return PolyVox::MaterialDensityPair88(Material, 255);
 }
 

@@ -3,6 +3,7 @@
 #include "PagedWorld.h"
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
 #include "TerrainPagingComponent.generated.h"
 
 
@@ -13,7 +14,7 @@ UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 public:
 	// Sets default values for this component's properties
 	UTerrainPagingComponent();
-
+	
 	//Radius in regions
 	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) int32 viewDistance = 4;
 	UPROPERTY(Category = "Paging Component", BlueprintReadWrite, EditAnywhere) bool bUseOverrideLocation;
